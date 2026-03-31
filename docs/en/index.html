@@ -1,0 +1,5261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Claude Code Works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@400;500;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0c0c14;
+  --bg-surface: #141420;
+  --bg-code: #1a1a2e;
+  --text: #e2e0dd;
+  --text-dim: #8888a0;
+  --text-heading: #f0eee8;
+  --accent: #818cf8;
+  --accent-dim: rgba(129,140,248,0.12);
+  --green: #34d399;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --border: #222238;
+  --sidebar-w: 280px;
+  --serif: 'Instrument Serif', Georgia, serif;
+  --mono: 'JetBrains Mono', 'Consolas', monospace;
+  --sans: 'DM Sans', 'Noto Sans SC', system-ui, sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.8;
+  font-size: 18px;
+}
+
+/* === TOP NAV === */
+.topnav {
+  position: fixed; top:0; left:0; right:0; z-index:200;
+  background: rgba(12,12,20,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0.6rem 1.5rem;
+  display: flex; justify-content: space-between; align-items: center;
+  height: 48px;
+}
+.topnav__title { font-family:var(--serif); font-size:1.05rem; color:var(--text-heading); }
+.topnav__links { display:flex; gap:1.2rem; }
+.topnav__links a { color:var(--text-dim); text-decoration:none; font-size:0.82rem; transition:color 0.2s; }
+.topnav__links a:hover { color:var(--accent); }
+.sidebar-toggle { display:none; background:none; border:none; color:var(--text); font-size:1.3rem; cursor:pointer; }
+
+/* === SIDEBAR === */
+.sidebar {
+  position: fixed; top:48px; left:0; bottom:0;
+  width: var(--sidebar-w);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 1rem 0;
+  z-index: 100;
+  transition: transform 0.3s;
+}
+.sidebar__section {
+  padding: 0.4rem 1rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  font-family: var(--mono);
+  margin-top: 0.75rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1rem 0.35rem 1.5rem;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  border-left: 2px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover, .sidebar a.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-left-color: var(--accent);
+}
+
+/* === MAIN CONTENT === */
+.main {
+  margin-left: var(--sidebar-w);
+  margin-top: 48px;
+  min-height: calc(100vh - 48px);
+}
+.article {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 6rem;
+}
+
+/* Headings */
+h1 { font-family:var(--serif); font-size:2.2rem; color:var(--text-heading); margin:2.5rem 0 1.2rem; line-height:1.2; border-bottom:2px solid var(--accent); padding-bottom:0.4rem; }
+h2 { font-family:var(--serif); font-size:1.6rem; color:var(--text-heading); margin:2.5rem 0 0.8rem; padding-top:1rem; border-top:1px solid var(--border); }
+h3 { font-size:1.15rem; color:var(--accent); margin:1.8rem 0 0.6rem; font-weight:700; }
+h4 { font-size:1rem; color:var(--text-heading); margin:1.2rem 0 0.4rem; }
+p { margin:0.65rem 0; }
+a { color:var(--accent); text-decoration:none; }
+a:hover { text-decoration:underline; }
+
+/* Blockquotes */
+blockquote {
+  border-left:3px solid var(--accent); background:var(--accent-dim);
+  padding:0.8rem 1.1rem; margin:1.2rem 0; border-radius:0 8px 8px 0; font-size:0.93rem;
+}
+blockquote p { margin:0.3rem 0; }
+blockquote strong { color:var(--accent); }
+
+/* Code */
+pre { background:var(--bg-code); border:1px solid var(--border); border-radius:8px; padding:1rem; overflow-x:auto; margin:0.8rem 0; font-size:0.82rem; line-height:1.55; }
+code { font-family:var(--mono); font-size:0.86em; }
+p code, li code, td code { background:var(--bg-code); padding:0.12em 0.35em; border-radius:4px; border:1px solid var(--border); font-size:0.83em; }
+
+/* Tables */
+table { width:100%; border-collapse:collapse; margin:1.2rem 0; font-size:0.88rem; }
+th { background:var(--bg-surface); color:var(--accent); font-weight:700; text-align:left; padding:0.6rem 0.8rem; border-bottom:2px solid var(--accent); font-size:0.78rem; text-transform:uppercase; letter-spacing:0.04em; }
+td { padding:0.5rem 0.8rem; border-bottom:1px solid var(--border); }
+tr:hover td { background:var(--bg-surface); }
+
+/* Images */
+img { max-width:100%; border-radius:8px; border:1px solid var(--border); margin:1.2rem 0; display:block; }
+img + em, p > em:only-child { display:block; text-align:center; color:var(--text-dim); font-size:0.82rem; margin-top:-0.5rem; margin-bottom:1.2rem; }
+
+/* Lists */
+ul, ol { margin:0.6rem 0; padding-left:1.5rem; }
+li { margin:0.25rem 0; }
+hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+strong { color:var(--text-heading); }
+
+/* Mermaid raw display */
+pre:has(code.language-mermaid) { background:var(--accent-dim); border-color:var(--accent); text-align:center; color:var(--text-dim); font-style:italic; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:var(--bg); }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:var(--accent); }
+
+/* === RESPONSIVE === */
+@media (max-width: 1024px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .main { margin-left: 0; }
+  .sidebar-toggle { display:block; }
+}
+@media (max-width: 640px) {
+  .article { padding:1.2rem 0.8rem 3rem; }
+  h1 { font-size:1.6rem; }
+  h2 { font-size:1.3rem; }
+  pre { font-size:0.75rem; padding:0.6rem; }
+}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <button class="sidebar-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">&#9776;</button>
+  <div class="topnav__title">How Claude Code Works</div>
+  <div class="topnav__links">
+    <a href="/-awesome-cc-harness/">Home</a>
+    <a href="/-awesome-cc-harness/zh/">中文</a>
+    <a href="/-awesome-cc-harness/en/">English</a>
+    <a href="https://github.com/WanLanglin/-awesome-cc-harness">GitHub</a>
+  </div>
+</nav>
+
+<aside class="sidebar" id="sidebar"></aside>
+
+<div class="main">
+  <article class="article" id="article">
+  <p><strong>A Comprehensive Textbook on AI Agent Infrastructure Design</strong></p>
+<blockquote>
+<p><strong>"The model is the agent. The code is the harness. Build great harnesses. The agent will do the rest."</strong></p>
+</blockquote>
+<p>本教程基于 Claude Code 源码（~512,664 行 TypeScript）的逆向工程与系统性分析，以教科书的体例深入剖析 AI Agent Harness 的每一个设计决策、工程取舍与实现细节。全文遵循学术写作规范，在代码分析之上构建理论框架，将零散的实现细节提炼为可复用的设计原则。</p>
+<p><strong>读者对象</strong>：AI 工程师、Agent 系统架构师、对 LLM 应用基础设施感兴趣的研究者。</p>
+<p><strong>前置知识</strong>：TypeScript 基础、LLM API 调用经验、基本的系统设计概念。</p>
+<p><img alt="Harness Engineering Architecture Overview" src="../images/01_harness_architecture.png" />
+<em>图 0-1: Harness Engineering 架构全景 — LLM 被六层 Harness 基础设施环绕：工具系统（43+）、权限模型（5 种模式）、Hooks 系统（26 事件 x 4 类型）、沙盒（文件+网络+进程隔离）、上下文工程（CLAUDE.md + 记忆 + 四级压缩）、设置与配置（7 级层级）。</em></p>
+<hr />
+<h2 id="_1">目录</h2>
+<ul>
+<li><a href="#第一章什么是-harness-engineering">第一章：什么是 Harness Engineering？</a></li>
+<li><a href="#第二章claude-code-架构全景">第二章：Claude Code 架构全景</a></li>
+<li><a href="#第三章agent-loop--harness-的心脏">第三章：Agent Loop — Harness 的心脏</a></li>
+<li><a href="#第四章tool-system--agent-的双手">第四章：Tool System — Agent 的双手</a></li>
+<li><a href="#第五章permission-model--约束架构">第五章：Permission Model — 约束架构</a></li>
+<li><a href="#第六章hooks-system--生命周期可扩展性">第六章：Hooks System — 生命周期可扩展性</a></li>
+<li><a href="#第七章sandbox--security--安全网">第七章：Sandbox &amp; Security — 安全网</a></li>
+<li><a href="#第八章context-engineering--信息管理的艺术">第八章：Context Engineering — 信息管理的艺术</a></li>
+<li><a href="#第九章settings--configuration--harness-的可调性">第九章：Settings &amp; Configuration — Harness 的可调性</a></li>
+<li><a href="#第十章mcp-integration--扩展-harness-的边界">第十章：MCP Integration — 扩展 Harness 的边界</a></li>
+<li><a href="#第十一章sub-agent-system--多智能体编排">第十一章：Sub-Agent System — 多智能体编排</a></li>
+<li><a href="#第十二章skills--plugins--扩展生态">第十二章：Skills &amp; Plugins — 扩展生态</a></li>
+<li><a href="#第十三章构建你自己的-harness--实战指南">第十三章：构建你自己的 Harness — 实战指南</a></li>
+<li><a href="#第十四章高级模式与设计哲学">第十四章：高级模式与设计哲学</a></li>
+<li><a href="#第十五章从零构建一个-mini-harness-hands-on-实战">第十五章：从零构建 Mini Harness（Hands-on 实战）</a></li>
+<li><a href="#第十六章竞品对比分析">第十六章：竞品对比分析</a></li>
+<li><a href="#结语从读者到构建者">结语：从读者到构建者</a></li>
+<li><a href="#参考文献">参考文献</a></li>
+<li><a href="#附录-aclaude-code-源码文件索引">附录 A：Claude Code 源码文件索引</a></li>
+<li><a href="#附录-b参考资源">附录 B：参考资源</a></li>
+<li><a href="#附录-ctoolUsecontext-完整类型定义">附录 C：ToolUseContext 完整类型定义</a></li>
+<li><a href="#附录-d13-条防护规则参考模型">附录 D：13 条防护规则参考模型</a></li>
+</ul>
+<hr />
+<h2 id="harness-engineering">第一章：什么是 Harness Engineering？</h2>
+<blockquote>
+<p>想象你要训练一匹野马。你不会直接骑上去——你会先搭建围栏、准备缰绳、铺好跑道。这些"基础设施"不是马本身，但没有它们，再好的马也只是一匹野马。</p>
+<p>AI Agent 也是如此。模型（LLM）是那匹马——强大但未被驯化。Harness Engineering 就是搭围栏、做缰绳、铺跑道的工程学科。</p>
+</blockquote>
+<h3 id="11">1.1 定义</h3>
+<p><strong>Harness Engineering</strong>（线束工程）是设计环境、约束、反馈循环和基础设施以使 AI Agent 在规模化场景下可靠运行的工程学科。</p>
+<p>这个术语在 2026 年初由 OpenAI 工程团队正式提出。他们描述了内部系统"用超过一百万行代码，没有一行是人类写的"——工程师不再直接写代码，而是"设计让 AI Agent 可靠编写代码的系统"。</p>
+<p>一个简单的类比帮助你理解：</p>
+<pre><code>┌─────────────────────────────────────────────────┐
+│                                                 │
+│   Agent = Model (LLM)                          │
+│   Harness = Everything Else                     │
+│                                                 │
+│   ┌──────────┐     ┌────────────────────────┐  │
+│   │  Claude   │ ←── │  Tools, Permissions,   │  │
+│   │  Opus/    │ ──→ │  Hooks, Sandbox,       │  │
+│   │  Sonnet   │     │  Memory, Settings,     │  │
+│   │          │     │  MCP, Skills, Agents   │  │
+│   └──────────┘     └────────────────────────┘  │
+│      Model              Harness                 │
+│                                                 │
+└─────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="12">1.2 三大支柱</h3>
+<p>要理解 Harness Engineering，把它拆成三根柱子来看最清晰。你可以把它想象成盖房子：Context Engineering 是打地基（确保信息到位），Architectural Constraints 是承重墙（确保结构不塌），Entropy Management 是物业维护（确保房子不老化）。</p>
+<pre><code class="language-mermaid">mindmap
+  root((Harness Engineering))
+    Context Engineering
+      静态上下文
+        CLAUDE.md
+        AGENTS.md
+        设计文档
+      动态上下文
+        日志与指标
+        Git 状态
+        CI/CD 状态
+      上下文压缩
+        四级管道
+        按需加载
+        记忆系统
+    Architectural Constraints
+      权限模型
+        5 种模式
+        7 级规则层级
+        AI 分类器
+      工具约束
+        Schema 验证
+        并发安全标记
+        延迟加载
+      安全边界
+        沙盒隔离
+        硬编码拒绝
+        纵深防御
+    Entropy Management
+      定期清理
+        死代码检测
+        文档一致性
+      约束验证
+        依赖审计
+        模式强制
+      性能监控
+        覆盖率守卫
+        回归检测
+</code></pre>
+<p><img alt="Three Pillars Time Allocation" src="../images/ch1_pillars_pie.png" />
+<em>图 1-2: 三大支柱的工程时间分配 — Context Engineering 占据最大比例（45%），因为"Agent 看不到的信息等于不存在"；Architectural Constraints 次之（35%）；Entropy Management 占 20% 但对长期稳定性至关重要。</em></p>
+<h4 id="context-engineering">支柱一：Context Engineering（上下文工程）</h4>
+<p>管理信息的可访问性、结构和时机。关键技术包括：</p>
+<ul>
+<li><strong>静态上下文</strong>：仓库文档、CLAUDE.md/AGENTS.md 文件、设计文档</li>
+<li><strong>动态上下文</strong>：日志、指标、目录映射、CI/CD 状态</li>
+<li><strong>核心原则</strong>："Agent 无法在上下文中访问的信息不存在"</li>
+</ul>
+<h4 id="architectural-constraints">支柱二：Architectural Constraints（架构约束）</h4>
+<p>通过机械执行而非建议来建立边界：</p>
+<ul>
+<li>依赖层级（Types → Config → Repo → Service → Runtime → UI）</li>
+<li>确定性 Linter 执行自定义规则</li>
+<li>基于 LLM 的审计员审查 Agent 合规性</li>
+<li>结构性测试和 pre-commit hooks</li>
+</ul>
+<p><strong>反直觉的收益</strong>：约束解空间让 Agent 更高效，而非更低效——通过阻止无用探索。</p>
+<h4 id="entropy-management">支柱三：Entropy Management（熵管理）</h4>
+<p>定期清理 Agent 解决代码退化：</p>
+<ul>
+<li>文档一致性验证</li>
+<li>约束违规扫描</li>
+<li>模式强制执行</li>
+<li>依赖审计</li>
+</ul>
+<h3 id="13-harness-engineering-vs">1.3 Harness Engineering vs 相关学科</h3>
+<table>
+<thead>
+<tr>
+<th>学科</th>
+<th>关系</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Prompt Engineering</strong></td>
+<td>Context Engineering 的子集（单次交互 vs 系统）</td>
+</tr>
+<tr>
+<td><strong>ML Engineering</strong></td>
+<td>独立学科；假设模型已部署</td>
+</tr>
+<tr>
+<td><strong>Agent Engineering</strong></td>
+<td>互补；Harness 工程师为 Agent 构建基础设施</td>
+</tr>
+<tr>
+<td><strong>DevOps</strong></td>
+<td>重叠的基础设施技能，应用于 AI 上下文</td>
+</tr>
+</tbody>
+</table>
+<h3 id="14">1.4 停下来想一想</h3>
+<p>在继续之前，试着回答这个问题：</p>
+<blockquote>
+<p>如果你今天要构建一个 AI 编码助手，你会把 80% 的工程时间花在哪里——改进模型，还是改进模型周围的系统？</p>
+</blockquote>
+<p>如果你的回答是"模型"，那么 Harness Engineering 会挑战你的直觉。LangChain 的案例证明，仅改变 Harness 就能在基准测试上提升 14 个百分点。模型是"给定的"，Harness 才是你能控制的。</p>
+<h3 id="15-harness">1.5 定量证据：Harness 的投资回报率</h3>
+<p>在深入"为什么现在"之前，让我们用数据说话：</p>
+<p><img alt="Harness ROI Comparison" src="../images/ch1_roi_comparison.png" />
+<em>图 1-1: Harness 优化 vs 模型优化的投资回报率对比 — 在 Terminal Bench 得分和开发周期缩短上，Harness 优化的收益远超模型优化，且所需工程时间仅为后者的十分之一。</em></p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>仅模型优化</th>
+<th>仅 Harness 优化</th>
+<th>两者结合</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Terminal Bench 2.0 得分</td>
+<td>+3-5% (模型升级)</td>
+<td>+14% (LangChain 案例)</td>
+<td>+18-20%</td>
+</tr>
+<tr>
+<td>开发周期缩短</td>
+<td>微不足道</td>
+<td>10x (OpenAI 百万行案例)</td>
+<td>&gt;10x</td>
+</tr>
+<tr>
+<td>工程师投入时间</td>
+<td>数月（训练/微调）</td>
+<td>1-2 小时（Level 1 Harness）</td>
+<td>数月</td>
+</tr>
+<tr>
+<td>可迁移性</td>
+<td>模型特定</td>
+<td>跨模型复用</td>
+<td>部分复用</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>关键洞察</strong>：Harness 优化的投资回报率（ROI）远高于模型优化。一个精心设计的 CLAUDE.md 文件只需 30 分钟，但可以将 Agent 在特定项目上的表现提升 20-40%。相比之下，模型微调需要数周时间和大量计算资源，且只对特定任务有效。</p>
+</blockquote>
+<h3 id="16">1.6 为什么现在？</h3>
+<p>三个趋同因素催生了需求：</p>
+<ol>
+<li><strong>模型商品化</strong> — 竞争优势从模型转向系统</li>
+<li><strong>生产部署</strong> — Agent 从演示走向面向客户的可靠性要求</li>
+<li><strong>基准局限</strong> — 标准指标无法衡量多小时、多步骤的 Agent 稳定性</li>
+</ol>
+<p>实际影响：LangChain 仅修改 Harness 架构（不换模型），在 Terminal Bench 2.0 上从 52.8% 提升到 66.5%，从 Top 30 跃升至 Top 5。</p>
+<h3 id="15">1.5 实施层级</h3>
+<table>
+<thead>
+<tr>
+<th>层级</th>
+<th>范围</th>
+<th>投入</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Level 1</td>
+<td>个人</td>
+<td>1-2 小时</td>
+<td>CLAUDE.md + pre-commit hooks + 测试套件</td>
+</tr>
+<tr>
+<td>Level 2</td>
+<td>小团队</td>
+<td>1-2 天</td>
+<td>AGENTS.md 规范 + CI 约束 + 共享模板</td>
+</tr>
+<tr>
+<td>Level 3</td>
+<td>组织</td>
+<td>1-2 周</td>
+<td>自定义中间件 + 可观测性 + 调度 Agent</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="claude-code">第二章：Claude Code 架构全景</h2>
+<blockquote>
+<p>在上一章我们建立了理论框架。从这一章开始，我们将用一个真实的、正在生产环境运行的系统来验证这些理论。这个系统就是 Claude Code——Anthropic 的官方 AI 编码助手 CLI，拥有超过 50 万行 TypeScript 代码，是目前最完整的生产级 Agent Harness 参考实现。</p>
+<p>为什么选择 Claude Code？因为它不是一个教学项目——它是每天被数以万计的开发者使用的真实产品。它的每一个设计决策背后，都有真实的用户痛点和工程取舍。通过逆向工程它的架构，我们能学到"课本上不会写"的实战智慧。</p>
+</blockquote>
+<h3 id="21">2.1 技术栈</h3>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>技术</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Runtime</strong></td>
+<td>Bun（TypeScript 原生，高性能）</td>
+</tr>
+<tr>
+<td><strong>Language</strong></td>
+<td>TypeScript（严格模式）</td>
+</tr>
+<tr>
+<td><strong>UI Framework</strong></td>
+<td>React + Ink（终端组件）</td>
+</tr>
+<tr>
+<td><strong>CLI Parser</strong></td>
+<td>Commander.js（@commander-js/extra-typings）</td>
+</tr>
+<tr>
+<td><strong>Schema Validation</strong></td>
+<td>Zod v4</td>
+</tr>
+<tr>
+<td><strong>Search Engine</strong></td>
+<td>ripgrep（通过 BashTool 调用）</td>
+</tr>
+<tr>
+<td><strong>API Client</strong></td>
+<td>@anthropic-ai/sdk</td>
+</tr>
+<tr>
+<td><strong>Protocols</strong></td>
+<td>MCP SDK, LSP</td>
+</tr>
+<tr>
+<td><strong>State Management</strong></td>
+<td>自定义 Zustand-like Store + React Context</td>
+</tr>
+<tr>
+<td><strong>Telemetry</strong></td>
+<td>OpenTelemetry + gRPC</td>
+</tr>
+<tr>
+<td><strong>Feature Flags</strong></td>
+<td>GrowthBook + Bun <code>bun:bundle</code></td>
+</tr>
+<tr>
+<td><strong>Auth</strong></td>
+<td>OAuth 2.0, JWT, macOS Keychain</td>
+</tr>
+</tbody>
+</table>
+<p><img alt="LOC Distribution" src="../images/ch2_loc_distribution.png" />
+<em>图 2-1: Claude Code 各目录代码行数分布 — tools/ 和 utils/ 是最大的两个目录，合计占约 32% 的代码量，反映出工具系统和基础设施工具是 Harness 的核心。</em></p>
+<p><img alt="Module Counts" src="../images/ch2_module_counts.png" />
+<em>图 2-2: 各类别模块数量 — components（144）和 commands（101）数量最多，体现了 Claude Code 作为终端 UI 应用的特征。</em></p>
+<h3 id="22">2.2 规模</h3>
+<ul>
+<li><strong>~1,884</strong> TypeScript/TSX 文件</li>
+<li><strong>512,664</strong> 行代码</li>
+<li><strong>43+</strong> 工具</li>
+<li><strong>100+</strong> Slash 命令</li>
+<li><strong>80+</strong> React Hooks</li>
+<li><strong>144+</strong> UI 组件</li>
+<li><strong>22+</strong> 服务模块</li>
+<li><strong>26+</strong> Hook 事件</li>
+</ul>
+<h3 id="23">2.3 目录结构</h3>
+<pre><code>src/
+├── main.tsx                    # 入口点，CLI 引导（803 KB）
+├── query.ts                    # 核心 Agent 循环（68 KB）
+├── QueryEngine.ts              # LLM 查询引擎（46 KB）
+├── Tool.ts                     # Tool 基础接口（29 KB）
+├── tools.ts                    # Tool 注册表（25 KB）
+├── Task.ts                     # 任务类型定义
+├── commands.ts                 # 命令注册
+│
+├── tools/                      # 43 个工具目录
+│   ├── BashTool/              # Shell 命令执行
+│   ├── FileReadTool/          # 文件读取
+│   ├── FileWriteTool/         # 文件创建
+│   ├── FileEditTool/          # 部分文件修改
+│   ├── GlobTool/              # 文件模式匹配
+│   ├── GrepTool/              # ripgrep 内容搜索
+│   ├── AgentTool/             # 子 Agent 生成
+│   ├── SkillTool/             # Skill 执行
+│   ├── MCPTool/               # MCP 服务器调用
+│   ├── WebFetchTool/          # URL 内容抓取
+│   ├── WebSearchTool/         # 网页搜索
+│   └── ...                    # 更多工具
+│
+├── commands/                   # ~101 个命令目录
+│   ├── commit/                # Git 提交
+│   ├── review/                # 代码审查
+│   ├── mcp/                   # MCP 管理
+│   ├── skills/                # Skill 管理
+│   └── ...
+│
+├── components/                 # 144+ React/Ink 终端组件
+├── hooks/                      # 80+ 自定义 React Hooks
+├── services/                   # 22 个服务子目录
+│   ├── api/                   # Anthropic API 客户端
+│   ├── mcp/                   # MCP 协议连接
+│   ├── oauth/                 # OAuth 认证
+│   ├── lsp/                   # 语言服务器协议
+│   ├── compact/               # 对话压缩
+│   ├── plugins/               # 插件加载
+│   └── ...
+│
+├── utils/                      # 33+ 子目录，100+ 文件
+│   ├── permissions/           # 权限逻辑
+│   ├── hooks.ts               # Hook 执行引擎
+│   ├── hooks/                 # Hook 配置管理
+│   ├── sandbox/               # 沙盒适配器
+│   ├── settings/              # 设置管理
+│   ├── bash/                  # Shell 工具
+│   ├── memdir/                # 持久记忆目录
+│   └── ...
+│
+├── state/                      # 应用状态管理
+├── entrypoints/                # CLI/MCP/SDK 入口
+├── bridge/                     # IDE 双向通信
+├── coordinator/                # 多 Agent 编排
+├── skills/                     # Skill 系统
+├── plugins/                    # 插件系统
+├── memdir/                     # 记忆目录系统
+├── schemas/                    # Zod 验证 Schema
+├── types/                      # 类型定义
+└── constants/                  # 应用常量
+</code></pre>
+<h3 id="24">2.4 入口点流程</h3>
+<pre><code>main.tsx → 并行预取（MDM设置 + Keychain + API预连接）
+    ↓
+Commander.js CLI 解析器初始化
+    ↓
+preAction Hook: init() → 遥测 → 插件 → 迁移 → 远程设置
+    ↓
+React/Ink 渲染器启动
+    ↓
+交互式 REPL/对话循环
+</code></pre>
+<p><strong>设计哲学</strong>：Claude Code 的入口点 <code>main.tsx</code>（803 KB）采用<strong>延迟加载</strong>策略。重型模块（OpenTelemetry, gRPC, analytics）在需要时才加载，而关键路径（MDM 设置、Keychain）则并行预取，确保启动速度。</p>
+<h3 id="25">2.5 核心数据流全景图</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────────────┐
+│                    Claude Code 数据流全景                             │
+│                                                                      │
+│  用户输入 ──→ UserPromptSubmit Hook ──→ Slash Command 解析           │
+│     │                                                                │
+│     v                                                                │
+│  QueryEngine.submitMessage()                                         │
+│     │                                                                │
+│     ├─→ 系统提示构建: base + tools + CLAUDE.md + MCP + memory       │
+│     ├─→ 消息规范化: normalizeMessagesForAPI()                        │
+│     │   ├─ 重排序 attachment 消息                                    │
+│     │   ├─ 合并连续 user/assistant 消息                              │
+│     │   ├─ 剥离 PDF/图片错误的重复内容                                │
+│     │   ├─ 规范化工具名称（别名→正式名）                              │
+│     │   └─ 工具搜索引用块处理                                        │
+│     │                                                                │
+│     v                                                                │
+│  queryLoop() [while(true)]                                           │
+│     │                                                                │
+│     ├─→ 压缩管道: snip → micro → collapse → auto                    │
+│     ├─→ API 调用: deps.sample() [流式]                               │
+│     │                                                                │
+│     ├─→ 工具执行: StreamingToolExecutor (并发) / runTools (顺序)     │
+│     │   │                                                            │
+│     │   ├─→ 工具分区: partitionToolCalls()                           │
+│     │   │   ├─ isConcurrencySafe=true → 并发执行                     │
+│     │   │   └─ isConcurrencySafe=false → 串行执行                    │
+│     │   │                                                            │
+│     │   └─→ 每个工具:                                                │
+│     │       ├─ Zod schema 验证                                       │
+│     │       ├─ tool.validateInput()                                  │
+│     │       ├─ PreToolUse Hook                                       │
+│     │       ├─ 权限检查 (rules → mode → classifier)                 │
+│     │       ├─ Sandbox 包装 (BashTool)                               │
+│     │       ├─ tool.call() [实际执行]                                │
+│     │       └─ PostToolUse Hook                                      │
+│     │                                                                │
+│     ├─→ 错误恢复: 7 个 continue 站点                                │
+│     └─→ Stop Hook → 终止或继续                                      │
+│                                                                      │
+│  终止 → SessionEnd Hook → 转录保存 → 退出                           │
+└─────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="26">2.6 消息类型系统</h3>
+<p>Claude Code 定义了丰富的消息类型系统，每种类型在 Agent Loop 中有不同的处理路径：</p>
+<pre><code class="language-typescript">// src/types/message.ts — 消息类型层次
+type Message =
+  | UserMessage           // 人类输入（或工具结果）
+  | AssistantMessage      // 模型响应（文本 + 工具调用）
+  | AttachmentMessage     // 记忆/资源附件
+  | SystemMessage         // 系统消息
+  | SystemLocalCommandMessage  // 本地工具结果（bash, read 等）
+  | ToolUseSummaryMessage // 压缩后的工具历史
+  | TombstoneMessage      // 已删除消息标记
+  | ProgressMessage       // 流式进度更新
+</code></pre>
+<p>消息规范化（<code>normalizeMessagesForAPI</code>）是一个复杂的管道，处理包括：</p>
+<ul>
+<li><strong>连续用户消息合并</strong>：Bedrock 不支持多个连续 user 消息，API 层面将它们合并</li>
+<li><strong>PDF/图片错误内容剥离</strong>：如果上传的 PDF 太大触发错误，后续轮次中自动剥离该内容，防止重复发送</li>
+<li><strong>工具名称规范化</strong>：别名（如旧名称）映射到当前正式名称</li>
+<li><strong>Tool Reference 处理</strong>：当 Tool Search 启用时保留引用块，禁用时剥离</li>
+<li><strong>虚拟消息过滤</strong>：REPL 内部工具调用的显示消息不发送给 API</li>
+</ul>
+<hr />
+<h2 id="agent-loop-harness">第三章：Agent Loop — Harness 的心脏</h2>
+<blockquote>
+<p>如果 Harness 是一辆汽车，Agent Loop 就是它的发动机。不管你的座椅多豪华、安全气囊多先进，没有发动机车就不能跑。</p>
+<p>本章是全书最重要的一章。我们将逐行拆解 Claude Code 的核心循环——<code>queryLoop()</code>——看它如何用一个 <code>while(true)</code> 驱动整个 AI 编码助手。读完本章，你会对"Agent 是如何工作的"有一个从底层到顶层的完整理解。</p>
+</blockquote>
+<p>Agent Loop 是整个 Harness 最核心的组件。Claude Code 的实现位于 <code>src/query.ts</code> 的 <code>queryLoop()</code> 函数。</p>
+<h3 id="31-async-generator">3.1 基本架构：无限循环 + Async Generator</h3>
+<p>以下是 Claude Code <strong>真实源码</strong>中 <code>queryLoop</code> 的签名和初始化（<code>src/query.ts</code>）：</p>
+<pre><code class="language-typescript">// src/query.ts — 真实的函数签名
+async function* queryLoop(
+  params: QueryParams,
+  consumedCommandUuids: string[],
+): AsyncGenerator&lt;
+  | StreamEvent
+  | RequestStartEvent
+  | Message
+  | TombstoneMessage
+  | ToolUseSummaryMessage,
+  Terminal
+&gt; {
+  // ===== 不可变参数 — 循环期间永不重新赋值 =====
+  const {
+    systemPrompt, userContext, systemContext,
+    canUseTool, fallbackModel, querySource,
+    maxTurns, skipCacheWrite,
+  } = params
+  const deps = params.deps ?? productionDeps()
+
+  // ===== 可变跨迭代状态 =====
+  // 循环体在每次迭代开始时解构此对象以保持裸名读取。
+  // Continue 站点写入 `state = { ... }` 而不是 9 个独立赋值。
+  let state: State = {
+    messages: params.messages,
+    toolUseContext: params.toolUseContext,
+    maxOutputTokensOverride: params.maxOutputTokensOverride,
+    autoCompactTracking: undefined,
+    stopHookActive: undefined,
+    maxOutputTokensRecoveryCount: 0,
+    hasAttemptedReactiveCompact: false,
+    turnCount: 1,
+    pendingToolUseSummary: undefined,
+    transition: undefined,  // 为什么上次迭代 continue 了
+  }
+
+  // 预算跟踪跨压缩边界（循环局部，不在 State 上）
+  let taskBudgetRemaining: number | undefined = undefined
+
+  // 查询配置快照（一次性捕获环境/statsig/会话状态）
+  const config = buildQueryConfig()
+
+  // 记忆预取（使用 `using` 确保在生成器退出时清理）
+  using pendingMemoryPrefetch = startRelevantMemoryPrefetch(
+    state.messages, state.toolUseContext,
+  )
+
+  while (true) {
+    // ... 循环体（下文详解）
+  }
+}
+</code></pre>
+<p><strong>State 类型定义</strong>（这是循环的"骨架"）：</p>
+<pre><code class="language-typescript">type State = {
+  messages: Message[]
+  toolUseContext: ToolUseContext
+  autoCompactTracking: AutoCompactTrackingState | undefined
+  maxOutputTokensRecoveryCount: number
+  hasAttemptedReactiveCompact: boolean
+  maxOutputTokensOverride: number | undefined
+  pendingToolUseSummary: Promise&lt;ToolUseSummaryMessage | null&gt; | undefined
+  stopHookActive: boolean | undefined
+  turnCount: number
+  transition: Continue | undefined  // 上次迭代为何 continue
+}
+</code></pre>
+<p>下面用状态图展示 <code>queryLoop</code> 的完整生命周期——每个状态对应循环中的一个阶段，每条边对应一个 transition reason：</p>
+<pre><code class="language-mermaid">stateDiagram-v2
+    [*] --&gt; Compaction: 进入循环
+    Compaction --&gt; APICall: 压缩完成
+    APICall --&gt; ToolExecution: 有 tool_use 块
+    APICall --&gt; StopHooks: 无 tool_use 块
+    APICall --&gt; CollapseRetry: 413 错误
+    APICall --&gt; ReactiveCompact: collapse 失败
+    APICall --&gt; EscalateTokens: max_output_tokens
+    APICall --&gt; MultiTurnRetry: 升级后仍截断
+    APICall --&gt; FallbackModel: FallbackTriggeredError
+
+    CollapseRetry --&gt; Compaction: continue site 1
+    ReactiveCompact --&gt; Compaction: continue site 2
+    EscalateTokens --&gt; Compaction: continue site 3
+    MultiTurnRetry --&gt; Compaction: continue site 4
+    FallbackModel --&gt; Compaction: continue site 6
+
+    ToolExecution --&gt; Compaction: continue site 7\n（正常下一轮）
+
+    StopHooks --&gt; [*]: 正常完成
+    StopHooks --&gt; Compaction: blocking error\ncontinue site 5
+    StopHooks --&gt; [*]: hook 阻止继续
+
+    ReactiveCompact --&gt; [*]: 恢复失败
+    MultiTurnRetry --&gt; [*]: 重试 3 次后耗尽
+</code></pre>
+<p><strong>简化后的逻辑流（帮助理解）</strong>：</p>
+<pre><code class="language-typescript">while (true) {
+    // 1. 解构状态
+    const { messages, toolUseContext, ... } = state;
+
+    // 2. 压缩管道
+    // 3. 构建系统提示 + 规范化消息
+    // 4. 调用 LLM API（流式）
+    // 5. 收集 tool_use 块
+    // 6. 错误恢复（7 个 continue 站点）
+    // 7. 工具执行
+    // 8. Stop Hook → 终止或继续
+    // 9. 更新状态 → continue
+}
+</code></pre>
+<p><strong>设计哲学</strong>：</p>
+<ul>
+<li><strong>Async Generator</strong>：不是返回最终结果，而是 <code>yield</code> 每一个中间事件（流式事件、消息、墓碑消息）。这使客户端可以在 API 调用完成前就开始渲染。</li>
+<li><strong>无限循环 + 显式退出</strong>：循环只在 <code>return Terminal</code> 时退出。这比有限循环更灵活，因为很多恢复路径需要重新迭代。</li>
+<li><strong>单一 State 对象</strong>：每次迭代开始时解构 State，在 continue 站点整体重新赋值，维护伪不可变语义。</li>
+</ul>
+<h3 id="32-continue">3.2 循环的七个 Continue 站点</h3>
+<p>Claude Code 的 queryLoop 有 <strong>7+ 个 continue 站点</strong>，每个对应不同的恢复场景：</p>
+<pre><code>┌─────────────────────────────────────────────────┐
+│                 queryLoop()                      │
+│                                                  │
+│  ┌──────────────────────────────────────────┐   │
+│  │ Continue Site 1: Proactive Compaction     │   │
+│  │ 触发: token 超过阈值                      │   │
+│  │ 动作: autocompact → 新消息 → continue     │   │
+│  └──────────────────────────────────────────┘   │
+│                                                  │
+│  ┌──────────────────────────────────────────┐   │
+│  │ Continue Site 2: Prompt Too Long          │   │
+│  │ 触发: API 返回 prompt-too-long 错误       │   │
+│  │ 动作: context-collapse → reactive compact │   │
+│  └──────────────────────────────────────────┘   │
+│                                                  │
+│  ┌──────────────────────────────────────────┐   │
+│  │ Continue Site 3: Max Output Tokens        │   │
+│  │ 触发: 模型输出截断                        │   │
+│  │ 动作: 升级 8k→64k → 多轮重试（最多3次）   │   │
+│  └──────────────────────────────────────────┘   │
+│                                                  │
+│  ┌──────────────────────────────────────────┐   │
+│  │ Continue Site 4: Fallback Model           │   │
+│  │ 触发: FallbackTriggeredError             │   │
+│  │ 动作: 切换模型 → 重试请求                 │   │
+│  └──────────────────────────────────────────┘   │
+│                                                  │
+│  ┌──────────────────────────────────────────┐   │
+│  │ Continue Site 5: Stop Hook Blocking       │   │
+│  │ 触发: 用户 Hook 要求额外轮次              │   │
+│  │ 动作: 注入 Hook 消息 → continue           │   │
+│  └──────────────────────────────────────────┘   │
+│                                                  │
+│  ┌──────────────────────────────────────────┐   │
+│  │ Continue Site 6: Image/Media Errors       │   │
+│  │ 触发: ImageSizeError / ImageResizeError   │   │
+│  │ 动作: 反应式压缩（移除图片）→ continue    │   │
+│  └──────────────────────────────────────────┘   │
+│                                                  │
+│  ┌──────────────────────────────────────────┐   │
+│  │ Continue Site 7: Tool Execution           │   │
+│  │ 触发: 正常工具执行完成                    │   │
+│  │ 动作: 收集结果 → 更新状态 → continue      │   │
+│  └──────────────────────────────────────────┘   │
+│                                                  │
+│  ┌──────────────────────────────────────────┐   │
+│  │ return Terminal — 唯一的退出点             │   │
+│  │ 条件: 无工具调用 + Stop Hook 不阻止        │   │
+│  └──────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="33-compaction-pipeline">3.3 压缩管道（Compaction Pipeline）</h3>
+<p>上下文窗口是有限的——即使是 1M token 的窗口，在长对话中也会被填满。Claude Code 实现了一个四级压缩管道，这是它最精巧的子系统之一。</p>
+<pre><code class="language-mermaid">flowchart TD
+    subgraph Pipeline[&quot;压缩管道（每轮迭代执行）&quot;]
+        direction TB
+        S[&quot;Level 1: Snip\n历史截断\n成本: 极低 | 延迟: ~0ms&quot;]
+        MC[&quot;Level 2: Microcompact\n老化工具结果缩减\n成本: 低 | 延迟: ~1ms&quot;]
+        CC[&quot;Level 3: Context-Collapse\n读时投射（不修改数组）\n成本: 中 | 延迟: ~5ms&quot;]
+        AC[&quot;Level 4: Autocompact\nLLM 全对话摘要\n成本: 高 | 延迟: ~2s&quot;]
+    end
+
+    S --&gt;|&quot;释放少量 token&quot;| MC
+    MC --&gt;|&quot;边界消息延迟&quot;| CC
+    CC --&gt;|&quot;如果仍超阈值&quot;| AC
+    CC --&gt;|&quot;如果低于阈值&quot;| Skip[&quot;跳过 Autocompact\n保留粒度上下文&quot;]
+
+    classDef light fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef medium fill:#fef9c3,stroke:#ca8a04,color:#713f12
+    classDef heavy fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef skip fill:#f3f4f6,stroke:#6b7280,color:#374151
+
+    class S,MC light
+    class CC medium
+    class AC heavy
+    class Skip skip
+</code></pre>
+<blockquote>
+<p><strong>源码批注分析</strong>：关于 Microcompact 和 Snip 的执行顺序，源码注释道：<em>"Apply snip before microcompact (both may run — they are not mutually exclusive)... snipTokensFreed is plumbed to autocompact: snip's threshold check must reflect what snip removed."</em> 这揭示了一个微妙的数据流依赖：Snip 释放的 token 数必须传递给 Autocompact 的阈值检查，否则 Autocompact 会低估已释放的空间，导致不必要的全对话摘要。</p>
+<p>关于 Context-Collapse，注释道：<em>"Nothing is yielded — the collapsed view is a read-time projection... summary messages live in the collapse store, not the REPL array."</em> 这意味着 Level 3 不修改任何数据结构——它只是改变了"读取方式"。这种设计使得 collapse 可以跨轮次持久化，而且完全可逆。</p>
+</blockquote>
+<p>每级独立运作，但有<strong>严格的执行顺序约束</strong>：</p>
+<pre><code>┌────────────────────────────────────────────────────────┐
+│                  Compaction Pipeline                     │
+│                                                         │
+│  Level 1: Snip Compact（每轮）                          │
+│  ├─ Feature-gated 历史截断                              │
+│  ├─ 追踪释放的 token 数                                  │
+│  └─ 最轻量，几乎无延迟                                   │
+│                                                         │
+│  Level 2: Microcompact（每轮）                           │
+│  ├─ 将 3 轮前的工具结果替换为 &quot;[Previous: used {tool}]&quot;  │
+│  ├─ 缓存压缩结果                                        │
+│  └─ 延迟边界消息直到 API 响应（知道 cache_deleted_input） │
+│                                                         │
+│  Level 3: Context-Collapse（读时投射）                   │
+│  ├─ 不修改消息数组，而是在读取时投射                      │
+│  ├─ 按粒度排空可折叠上下文                               │
+│  └─ 低成本，渐进式                                      │
+│                                                         │
+│  Level 4: Autocompact（&gt;50k tokens 时触发）              │
+│  ├─ 保存完整转录到磁盘                                   │
+│  ├─ LLM 总结所有消息                                     │
+│  ├─ 用摘要替换所有消息                                   │
+│  └─ 最重量级，但释放最多空间                              │
+│                                                         │
+│  执行顺序: snip → micro → context-collapse → auto        │
+│  各级互不排斥，可组合运行                                 │
+└────────────────────────────────────────────────────────┘
+</code></pre>
+<p><strong>设计哲学</strong>：</p>
+<ul>
+<li><strong>渐进式</strong>：先尝试轻量操作，只在必要时升级到重量操作</li>
+<li><strong>边界延迟</strong>：Microcompact 的边界消息延迟到 API 响应后，因为此时才知道缓存命中情况</li>
+<li><strong>预算追踪跨压缩边界</strong>：<code>taskBudgetRemaining</code> 在压缩前捕获最终窗口，累计跨多次压缩</li>
+</ul>
+<h3 id="34">3.4 工具执行编排</h3>
+<p>Claude Code 有两种工具执行模式，实际生产中两者共存：</p>
+<h4 id="1-streamingtoolexecutor">模式 1: StreamingToolExecutor（默认 — 边流式边执行）</h4>
+<pre><code class="language-typescript">// src/services/tools/toolOrchestration.ts — 真实代码
+export class StreamingToolExecutor {
+  private tools: TrackedTool[] = []
+  private toolUseContext: ToolUseContext
+  private hasErrored = false
+  // 子 AbortController：当一个 Bash 工具出错时，
+  // 兄弟子进程立即死亡，但不中止父级查询
+  private siblingAbortController: AbortController
+  private discarded = false
+
+  addTool(block: ToolUseBlock, assistantMessage: AssistantMessage): void {
+    const toolDefinition = findToolByName(this.toolDefinitions, block.name)
+    if (!toolDefinition) {
+      // 工具不存在 → 立即创建错误结果
+      this.tools.push({
+        id: block.id, block, assistantMessage,
+        status: 'completed',
+        isConcurrencySafe: true,
+        pendingProgress: [],
+        results: [createUserMessage({
+          content: [{
+            type: 'tool_result',
+            content: `&lt;tool_use_error&gt;Error: No such tool: ${block.name}&lt;/tool_use_error&gt;`,
+            is_error: true,
+            tool_use_id: block.id,
+          }],
+        })],
+      })
+      return
+    }
+
+    // 解析输入并判断是否可并发
+    const parsedInput = toolDefinition.inputSchema.safeParse(block.input)
+    const isConcurrencySafe = parsedInput?.success
+      ? Boolean(toolDefinition.isConcurrencySafe(parsedInput.data))
+      : false
+
+    this.tools.push({
+      id: block.id, block, assistantMessage,
+      status: 'queued', isConcurrencySafe,
+      pendingProgress: [],
+    })
+
+    void this.processQueue()  // 立即开始处理
+  }
+
+  // 当流式回退发生时，丢弃所有待处理和进行中的工具
+  discard(): void { this.discarded = true }
+}
+</code></pre>
+<p><strong>关键设计</strong>：<code>addTool()</code> 在模型流式生成过程中被调用。每当识别到一个完整的 <code>tool_use</code> JSON 块，该工具<strong>立即</strong>排队执行。模型还在生成第二个工具调用时，第一个已经在运行了。</p>
+<h4 id="2-runtools">模式 2: runTools()（回退 — 分区后执行）</h4>
+<pre><code class="language-typescript">// src/services/tools/toolOrchestration.ts — 真实代码
+export async function* runTools(
+  toolUseMessages: ToolUseBlock[],
+  assistantMessages: AssistantMessage[],
+  canUseTool: CanUseToolFn,
+  toolUseContext: ToolUseContext,
+): AsyncGenerator&lt;MessageUpdate, void&gt; {
+  let currentContext = toolUseContext
+
+  // 核心设计：工具分区
+  for (const { isConcurrencySafe, blocks } of partitionToolCalls(
+    toolUseMessages, currentContext,
+  )) {
+    if (isConcurrencySafe) {
+      // ===== 只读批次：并发执行 =====
+      const queuedContextModifiers: Record&lt;string, ((ctx) =&gt; ctx)[]&gt; = {}
+      for await (const update of runToolsConcurrently(blocks, ...)) {
+        if (update.contextModifier) {
+          // 收集上下文修改器，延迟应用
+          queuedContextModifiers[update.contextModifier.toolUseID]
+            ?.push(update.contextModifier.modifyContext)
+        }
+        yield { message: update.message, newContext: currentContext }
+      }
+      // 批次完成后，按顺序应用所有上下文修改
+      for (const block of blocks) {
+        for (const modifier of queuedContextModifiers[block.id] ?? []) {
+          currentContext = modifier(currentContext)
+        }
+      }
+    } else {
+      // ===== 写入批次：串行执行 =====
+      for await (const update of runToolsSerially(blocks, ...)) {
+        if (update.newContext) currentContext = update.newContext
+        yield { message: update.message, newContext: currentContext }
+      }
+    }
+  }
+}
+</code></pre>
+<p><strong>工具分区算法</strong> (<code>partitionToolCalls</code>)：</p>
+<pre><code>输入: [Read(&quot;a.ts&quot;), Read(&quot;b.ts&quot;), Write(&quot;c.ts&quot;), Read(&quot;d.ts&quot;)]
+
+分区结果:
+  批次 1: { isConcurrencySafe: true,  blocks: [Read(&quot;a.ts&quot;), Read(&quot;b.ts&quot;)] }
+  批次 2: { isConcurrencySafe: false, blocks: [Write(&quot;c.ts&quot;)] }
+  批次 3: { isConcurrencySafe: true,  blocks: [Read(&quot;d.ts&quot;)] }
+
+执行顺序: 批次 1 并发 → 批次 2 串行 → 批次 3 并发
+</code></pre>
+<p><strong>设计哲学</strong>：只读工具（Read, Glob, Grep）天然可并发——它们不修改状态。写入工具（Write, Edit, Bash）必须串行，因为它们可能依赖前一个工具的副作用。分区算法将连续的同类工具分组，在安全性和性能之间取得最优平衡。上下文修改器（<code>contextModifier</code>）被收集并延迟应用，确保并发执行期间的上下文一致性。</p>
+<blockquote>
+<p><strong>为什么这很重要？</strong> 假设 Agent 要读取 10 个文件来回答一个架构问题。如果没有工具分区，这 10 个 Read 会一个接一个串行执行——每个可能需要几十毫秒。有了分区，它们并发执行，总时间约等于最慢的那一个。在实际使用中，这让"读取代码库"这类操作从秒级降到毫秒级。这种优化对用户来说是"感觉上的流畅"——你不需要知道原理，但你会注意到它快。</p>
+</blockquote>
+<h3 id="35">3.5 错误恢复级联（含真实源码）</h3>
+<p>Claude Code 对可恢复错误实现了<strong>级联恢复策略</strong>。以下是 <code>src/query.ts</code> 中的真实代码：</p>
+<h4 id="prompt-too-long-413">Prompt Too Long (413) 恢复</h4>
+<pre><code class="language-typescript">// src/query.ts — 真实的 413 恢复代码
+if (isWithheld413) {
+  // 第 1 步: 排空 context-collapse 队列
+  // 只有在上次 transition 不是 collapse_drain_retry 时才尝试
+  // （如果已经排空过但仍然 413，跳过直接进入 reactive compact）
+  if (feature('CONTEXT_COLLAPSE') &amp;&amp; contextCollapse
+      &amp;&amp; state.transition?.reason !== 'collapse_drain_retry') {
+    const drained = contextCollapse.recoverFromOverflow(messagesForQuery, querySource)
+    if (drained.committed &gt; 0) {
+      state = { ...state,
+        messages: drained.messages,
+        transition: { reason: 'collapse_drain_retry', committed: drained.committed },
+      }
+      continue  // ← Continue Site 1
+    }
+  }
+}
+
+// 第 2 步: Reactive Compact（完整摘要）
+if ((isWithheld413 || isWithheldMedia) &amp;&amp; reactiveCompact) {
+  const compacted = await reactiveCompact.tryReactiveCompact({
+    hasAttempted: hasAttemptedReactiveCompact,  // 防止无限循环
+    querySource,
+    aborted: toolUseContext.abortController.signal.aborted,
+    messages: messagesForQuery,
+    cacheSafeParams: { systemPrompt, userContext, systemContext, ... },
+  })
+
+  if (compacted) {
+    // 预算跟踪：捕获压缩前的最终上下文窗口
+    if (params.taskBudget) {
+      const preCompactContext = finalContextTokensFromLastResponse(messagesForQuery)
+      taskBudgetRemaining = Math.max(0,
+        (taskBudgetRemaining ?? params.taskBudget.total) - preCompactContext)
+    }
+
+    const postCompactMessages = buildPostCompactMessages(compacted)
+    for (const msg of postCompactMessages) { yield msg }
+
+    state = { ...state,
+      messages: postCompactMessages,
+      hasAttemptedReactiveCompact: true,
+      transition: { reason: 'reactive_compact_retry' },
+    }
+    continue  // ← Continue Site 2
+  }
+
+  // 第 3 步: 所有恢复失败 → 向用户报告
+  // 关键：不要进入 Stop Hooks！模型从未产生有效响应，
+  // Stop Hooks 无法有意义地评估。运行 Stop Hooks 会造成死亡螺旋：
+  // error → hook blocking → retry → error → ...
+  yield lastMessage
+  void executeStopFailureHooks(lastMessage, toolUseContext)
+  return { reason: 'prompt_too_long' }
+}
+</code></pre>
+<h4 id="max-output-tokens">Max Output Tokens 恢复</h4>
+<pre><code class="language-typescript">// src/query.ts — 真实的 max_output_tokens 恢复代码
+if (isWithheldMaxOutputTokens(lastMessage)) {
+
+  // 升级重试：如果使用了默认的 8k 上限，升级到 64k 重试 **同一请求**
+  // 无 meta 消息，无多轮交互
+  const capEnabled = getFeatureValue_CACHED_MAY_BE_STALE('tengu_otk_slot_v1', false)
+  if (capEnabled &amp;&amp; maxOutputTokensOverride === undefined
+      &amp;&amp; !process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS) {
+    logEvent('tengu_max_tokens_escalate', { escalatedTo: ESCALATED_MAX_TOKENS })
+    state = { ...state,
+      maxOutputTokensOverride: ESCALATED_MAX_TOKENS,  // 64k
+      transition: { reason: 'max_output_tokens_escalate' },
+    }
+    continue  // ← Continue Site 3
+  }
+
+  // 多轮恢复：注入恢复消息，要求模型从断点继续
+  if (maxOutputTokensRecoveryCount &lt; MAX_OUTPUT_TOKENS_RECOVERY_LIMIT) {  // 限制 3 次
+    const recoveryMessage = createUserMessage({
+      content: `Output token limit hit. Resume directly — no apology, no recap. ` +
+        `Pick up mid-thought if that is where the cut happened. ` +
+        `Break remaining work into smaller pieces.`,
+      isMeta: true,
+    })
+
+    state = { ...state,
+      messages: [...messagesForQuery, ...assistantMessages, recoveryMessage],
+      maxOutputTokensRecoveryCount: maxOutputTokensRecoveryCount + 1,
+      transition: {
+        reason: 'max_output_tokens_recovery',
+        attempt: maxOutputTokensRecoveryCount + 1,
+      },
+    }
+    continue  // ← Continue Site 4
+  }
+
+  // 恢复耗尽 → 展示被截断的错误
+  yield lastMessage
+}
+</code></pre>
+<h4 id="stop-hook">Stop Hook 恢复</h4>
+<pre><code class="language-typescript">// src/query.ts — Stop Hook 阻止后的恢复
+const stopHookResult = yield* handleStopHooks(
+  messagesForQuery, assistantMessages, systemPrompt,
+  userContext, systemContext, toolUseContext, querySource, stopHookActive,
+)
+
+if (stopHookResult.preventContinuation) {
+  return { reason: 'stop_hook_prevented' }
+}
+
+if (stopHookResult.blockingErrors.length &gt; 0) {
+  state = { ...state,
+    messages: [...messagesForQuery, ...assistantMessages, ...stopHookResult.blockingErrors],
+    maxOutputTokensRecoveryCount: 0,
+    // 关键：保留 hasAttemptedReactiveCompact 标志！
+    // 如果 compact 已经运行但无法恢复 prompt-too-long，
+    // 重置此标志会导致无限循环：
+    // compact → 仍然太长 → error → stop hook → compact → ...
+    hasAttemptedReactiveCompact,
+    stopHookActive: true,
+    transition: { reason: 'stop_hook_blocking' },
+  }
+  continue  // ← Continue Site 5
+}
+</code></pre>
+<h4 id="_2">所有终止原因</h4>
+<pre><code class="language-typescript">// query.ts 中的 10 种终止原因
+return { reason: 'completed' }           // 正常完成（无工具调用 + Stop Hook 不阻止）
+return { reason: 'blocking_limit' }      // 硬性 token 限制
+return { reason: 'stop_hook_prevented' } // Stop Hook 阻止继续
+return { reason: 'aborted_streaming' }   // 用户中断（模型响应中）
+return { reason: 'aborted_tools' }       // 用户中断（工具执行中）
+return { reason: 'hook_stopped' }        // Hook 附件停止继续
+return { reason: 'max_turns', turnCount }// 达到最大轮次限制
+return { reason: 'prompt_too_long' }     // 413 恢复耗尽
+return { reason: 'image_error' }         // 图片/PDF 太大
+return { reason: 'model_error', error }  // 意外异常
+</code></pre>
+<p><strong>源码批注深度分析</strong>：</p>
+<p>以下洞察来自 Claude Code 源码中的内部开发者注释，揭示了生产环境中的真实工程挑战：</p>
+<p><strong>1. 错误扣留（Error Withholding）策略</strong></p>
+<p>源码注释写道：<em>"yielding early would leak intermediate errors to consumers like cowork/desktop that terminate on any <code>error</code> field, even though recovery is still running."</em></p>
+<p>这意味着 queryLoop 不是在发现错误时立即 <code>yield</code>，而是<strong>扣留错误</strong>（withheld），等恢复流程走完后才决定是否展示。这防止了下游消费者（IDE 扩展、桌面应用）看到中间态的错误就提前终止。</p>
+<p><strong>2. 压缩边界的预算跟踪</strong></p>
+<p>源码注释写道：<em>"remaining is undefined until first compact fires — before compact the server sees full history and counts down from {total} itself (see api/api/sampling/prompt/renderer.py:292); after compact, server only sees summary and would under-count spend."</em></p>
+<p>这揭示了一个精妙的服务端-客户端协同设计：压缩前，服务端能看到完整历史并自己计算预算消耗；压缩后，服务端只能看到摘要，所以客户端必须告诉服务端"你看不到的那部分消耗了多少"。</p>
+<p><strong>3. hasAttemptedReactiveCompact 不重置的原因</strong></p>
+<p>注意 Stop Hook 恢复中 <code>hasAttemptedReactiveCompact</code> 标志被<strong>保留</strong>而非重置。源码注释解释：<em>如果 compact 已经运行但无法恢复 prompt-too-long，重置此标志会导致无限循环：compact → 仍然太长 → error → stop hook → compact → …</em>。这是一个真实的生产 bug 修复。</p>
+<p><strong>4. 记忆预取的 <code>using</code> 语义</strong></p>
+<p><code>using pendingMemoryPrefetch = startRelevantMemoryPrefetch(...)</code> 使用了 TC39 的 Explicit Resource Management 提案（<code>using</code> 关键字）。源码注释道：<em>"Fired once per user turn — the prompt is invariant across loop iterations, so per-iteration firing would ask sideQuery the same question N times."</em> <code>using</code> 确保在生成器退出（正常或异常）时自动清理预取资源。</p>
+<blockquote>
+<p><strong>教学要点</strong>：这些细节揭示了一个核心原则——<strong>生产级 Agent Loop 的复杂性不在于"循环本身"，而在于"循环失败时如何优雅恢复"</strong>。一个 30 行的 while(true) 就能实现基本的 Agent Loop，但处理好所有边界情况需要 1800+ 行。这中间的差距就是 Harness Engineering 的全部价值。</p>
+</blockquote>
+<h3 id="36">3.6 停下来想一想</h3>
+<p>读完 Agent Loop，试着回答：</p>
+<blockquote>
+<ol>
+<li>为什么 queryLoop 用 <code>while(true)</code> 而不是递归？（提示：考虑内存和栈深度）</li>
+<li>为什么压缩管道有 4 级而不是 1 级？（提示：考虑成本和延迟的权衡）</li>
+<li>如果你要给循环添加一个新的恢复路径（比如"API 密钥过期"），你需要修改哪些地方？</li>
+</ol>
+</blockquote>
+<p>这些问题没有标准答案，但思考它们会帮助你理解"为什么"而不仅仅是"怎么做"。</p>
+<p><img alt="Agent Loop Complexity Analysis" src="../images/ch3_loop_analysis.png" />
+<em>图 3-2: (左) 最小实现 vs 生产实现的复杂性对比（对数刻度）— 代码行数增长 60 倍，但每个维度的增长都对应真实的生产需求。(右) 四级压缩管道的 Token 释放效率 — 从 180K 逐级降至 45K。</em></p>
+<p><img alt="Continue Site Frequency" src="../images/ch3_continue_sites.png" />
+<em>图 3-3: 7 个 continue 站点的触发频率估计 — "Next Turn"（正常推进）占 95%，错误恢复站点合计约 5%，但正是这 5% 的代码（约 500 行）防止了会话中断和成本失控。</em></p>
+<p><img alt="Agent Loop State Machine" src="../images/02_agent_loop.png" />
+<em>图 3-1: queryLoop() 状态机 — 展示 7 个 continue 站点、4 级压缩管道、StreamingToolExecutor 并行执行和 10 种终止原因的完整流转。</em></p>
+<h3 id="37-agent-loop">3.7 定量分析：Agent Loop 的复杂性度量</h3>
+<p>为了量化"最小 Agent Loop"和"生产 Agent Loop"之间的差距，我们对 <code>src/query.ts</code> 进行了代码度量分析：</p>
+<table>
+<thead>
+<tr>
+<th>度量指标</th>
+<th>最小实现 (s01)</th>
+<th>Claude Code 生产实现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>代码行数</strong></td>
+<td>30 行</td>
+<td>1,800+ 行</td>
+</tr>
+<tr>
+<td><strong>Continue 站点</strong></td>
+<td>1 个</td>
+<td>7 个</td>
+</tr>
+<tr>
+<td><strong>终止原因</strong></td>
+<td>1 个 (completed)</td>
+<td>10 个</td>
+</tr>
+<tr>
+<td><strong>错误恢复路径</strong></td>
+<td>0 个</td>
+<td>5 个级联恢复</td>
+</tr>
+<tr>
+<td><strong>压缩策略</strong></td>
+<td>0 级</td>
+<td>4 级管道</td>
+</tr>
+<tr>
+<td><strong>并发模式</strong></td>
+<td>串行</td>
+<td>2 种 (Streaming + Sequential)</td>
+</tr>
+<tr>
+<td><strong>状态字段</strong></td>
+<td>1 个 (messages)</td>
+<td>10 个 (State 类型)</td>
+</tr>
+<tr>
+<td><strong>Analytics 埋点</strong></td>
+<td>0 个</td>
+<td>15+ 个</td>
+</tr>
+<tr>
+<td><strong>Feature Gates</strong></td>
+<td>0 个</td>
+<td>8+ 个</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>复杂性增长分析</strong>：从 30 行到 1,800 行是 60 倍的增长。但这不是"过度工程"——每一行都对应一个真实的生产问题。例如：
+- <code>hasAttemptedReactiveCompact</code> 标志只有 1 行，但它防止了一个会消耗数千美元 API 费用的无限循环 bug。
+- <code>taskBudgetRemaining</code> 跟踪逻辑约 20 行，但它是唯一能在压缩边界后正确计算 Token 消耗的机制。
+- StreamingToolExecutor 约 200 行，但它将多工具执行延迟从 O(n) 降到 O(1)（最慢工具的时间）。</p>
+</blockquote>
+<h3 id="38-agent-loop">3.8 Agent Loop 的设计哲学总结</h3>
+<ol>
+<li><strong>弹性优于刚性</strong>：7+ 个 continue 站点允许从几乎任何错误中恢复</li>
+<li><strong>渐进式降级</strong>：每种错误先尝试最轻量的恢复，逐步升级</li>
+<li><strong>流式优先</strong>：Async Generator 使每个中间状态都可观察</li>
+<li><strong>状态显式化</strong>：单一 State 对象，无隐式全局状态</li>
+<li><strong>可观测性内建</strong>：每个恢复点都有 analytics 和 profiling</li>
+</ol>
+<hr />
+<h2 id="tool-system-agent">第四章：Tool System — Agent 的双手</h2>
+<blockquote>
+<p>Agent Loop 是发动机，那工具系统就是方向盘和油门。发动机再强大，如果不能操控方向、调节速度，车也到不了目的地。</p>
+<p>在 Claude Code 中，模型（LLM）本身<strong>不能</strong>读文件、不能运行命令、不能搜索代码。它唯一能做的就是生成文本。但通过工具系统，这些文本被翻译成真实的操作——读一个文件、编辑一行代码、运行一个测试。</p>
+<p>本章我们来看 Claude Code 如何设计一个 43+ 工具的系统，每个工具既是独立的、又是统一管理的。这套设计模式你可以直接复用到自己的 Agent 项目中。</p>
+</blockquote>
+<p>工具系统是 Harness 中 Agent 与外部世界交互的唯一通道。Claude Code 实现了一个 43+ 工具的系统，每个工具都是自包含模块。</p>
+<h3 id="41-tool">4.1 Tool 接口定义</h3>
+<p>位于 <code>src/Tool.ts</code>，这是所有工具的基础类型：</p>
+<pre><code class="language-typescript">type Tool&lt;
+  Input extends AnyObject = AnyObject,
+  Output = unknown,
+  P extends ToolProgressData = ToolProgressData,
+&gt; = {
+  // ===== 核心标识 =====
+  name: string;                    // 工具名称（主标识符）
+  aliases?: string[];              // 别名（向后兼容）
+  userFacingName(): string;        // 显示名称
+
+  // ===== Schema &amp; 验证 =====
+  inputSchema: ZodType&lt;Input&gt;;     // Zod 输入验证
+  inputJSONSchema?: JSONSchema;    // 可选 JSON Schema（MCP 工具）
+  outputSchema?: ZodType&lt;Output&gt;;  // 可选输出类型
+  validateInput(input): Promise&lt;ValidationResult&gt;;
+
+  // ===== 执行 =====
+  call(
+    args: Input,
+    context: ToolUseContext,
+    canUseTool: CanUseTool,
+    parentMessage: AssistantMessage,
+    progressCallback?: ProgressCallback&lt;P&gt;,
+  ): Promise&lt;ToolResult&lt;Output&gt;&gt;;
+
+  // ===== 权限 &amp; 安全 =====
+  checkPermissions(args, context): Promise&lt;PermissionDecision&gt;;
+  isConcurrencySafe(args): boolean;      // 能否并行执行
+  isDestructive(args): boolean;          // 不可逆操作？
+  isReadOnly(): boolean;                 // 只读操作？
+  preparePermissionMatcher(args): string; // Hook 模式匹配
+
+  // ===== 行为 =====
+  isEnabled(): boolean;                  // 特性门控检查
+  interruptBehavior(): 'cancel' | 'block';
+  requiresUserInteraction(): boolean;
+
+  // ===== 渲染 =====
+  renderToolUseMessage(args): ReactElement;
+  renderToolResultMessage(result): ReactElement;
+  renderToolUseProgressMessage(progress): ReactElement;
+
+  // ===== 搜索 &amp; 折叠 =====
+  searchHint: string;                    // ToolSearch 的 3-10 词关键词
+  shouldDefer: boolean;                  // 延迟加载
+  alwaysLoad: boolean;                   // 永不延迟
+
+  // ===== 描述（动态生成）=====
+  description(isNonInteractive?: boolean): string;
+  prompt(context): string;               // 系统提示片段
+};
+</code></pre>
+<p><strong>设计哲学</strong>：</p>
+<ul>
+<li><strong>自描述</strong>：每个工具携带自己的 Schema、描述、权限逻辑和渲染函数</li>
+<li><strong>双 Schema 支持</strong>：Zod（内部验证） + JSON Schema（MCP 互操作）</li>
+<li><strong>动态描述</strong>：<code>description()</code> 接收交互模式参数，非交互模式下可省略UI相关说明</li>
+<li><strong>延迟加载</strong>：<code>shouldDefer</code> 让不常用工具在第一轮不加载到模型上下文，节省 token</li>
+</ul>
+<blockquote>
+<p><strong>初学者常见误区</strong>：很多人设计工具系统时只关注 <code>call()</code> 方法——"工具能做什么"。但在生产环境中，<strong>权限检查、输入验证、进度渲染</strong>占了工具代码的 80%。一个好的工具接口不只是"执行"，而是"安全地、可观测地、可中断地执行"。</p>
+</blockquote>
+<h3 id="42">4.2 工具注册表</h3>
+<p>位于 <code>src/tools.ts</code>：</p>
+<pre><code class="language-typescript">// 唯一的工具真实来源
+function getAllBaseTools(): Tool[] {
+  return [
+    // === 始终加载 ===
+    AgentTool,
+    TaskOutputTool,
+    BashTool,
+    FileReadTool,
+    FileEditTool,
+    FileWriteTool,
+    WebFetchTool,
+    WebSearchTool,
+    AskUserQuestionTool,
+    SkillTool,
+    // ...更多始终可用的工具
+
+    // === 特性门控 ===
+    ...(feature('PROACTIVE') ? [SleepTool] : []),
+    ...(feature('AGENT_TRIGGERS') ? [ScheduleCronTool] : []),
+    ...(feature('COORDINATOR_MODE') ? [TeamCreateTool, TeamDeleteTool] : []),
+    ...(isReplModeEnabled() ? [REPLTool] : []),
+    // ...更多条件工具
+  ];
+}
+</code></pre>
+<p><strong>Dead Code Elimination（死代码消除）</strong>：</p>
+<pre><code class="language-typescript">// Bun 的 bun:bundle 在编译时评估 feature() 调用
+// 如果 feature('PROACTIVE') 编译为 false:
+...(false ? [SleepTool] : [])
+// → SleepTool 的全部代码被 tree-shake 移除
+// 包括其引用的所有字符串和依赖
+</code></pre>
+<p>这是 Claude Code 的一个关键设计模式：<strong>编译时特性门控</strong>。外部发行版可以通过设置 feature flags 来移除整个子系统，而不需要手动删除代码。</p>
+<h3 id="43">4.3 工具池组装</h3>
+<pre><code class="language-typescript">function assembleToolPool(builtInTools: Tool[], mcpTools: Tool[]): Tool[] {
+  // 1. 过滤被 deny 规则禁止的 MCP 工具
+  const filteredMcp = mcpTools.filter(t =&gt; !getDenyRuleForTool(t));
+
+  // 2. 分别排序（保持 prompt cache 稳定性）
+  const sortedBuiltIn = sortBy(builtInTools, t =&gt; t.name);
+  const sortedMcp = sortBy(filteredMcp, t =&gt; t.name);
+
+  // 3. 连接：内置工具在前（作为缓存前缀）
+  const combined = [...sortedBuiltIn, ...sortedMcp];
+
+  // 4. 去重（内置优先）
+  return uniqBy(combined, t =&gt; t.name);
+}
+</code></pre>
+<p><strong>Cache Stability（缓存稳定性）设计</strong>：</p>
+<p>内置工具按名称排序后形成稳定的<strong>缓存前缀</strong>。当 MCP 工具增减时，前缀不变，Anthropic API 的 prompt cache 不会失效。这是一个微妙但重要的性能优化。</p>
+<h3 id="44">4.4 工具执行生命周期</h3>
+<p><img alt="Tool Execution Pipeline" src="../images/03_tool_pipeline.png" />
+<em>图 4-1: 工具执行管道的 7 步流程 — 从 Zod Schema 验证到 PostToolUse Hook，每一步都可能改变工具的行为或阻止执行。</em></p>
+<p>用下面的序列图理解一个工具从请求到执行的完整路径——注意 Hook 如何在关键节点介入：</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant M as Model
+    participant V as Validator
+    participant PH as PreToolUse Hook
+    participant P as Permission Engine
+    participant S as Sandbox
+    participant T as Tool.call()
+    participant AH as PostToolUse Hook
+
+    M-&gt;&gt;V: tool_use block
+    V-&gt;&gt;V: Zod Schema 验证
+    alt 验证失败
+        V--&gt;&gt;M: 格式错误消息
+    end
+    V-&gt;&gt;V: tool.validateInput()
+    alt 验证失败
+        V--&gt;&gt;M: 业务逻辑错误
+    end
+    V-&gt;&gt;PH: 输入 JSON
+    PH-&gt;&gt;PH: 条件匹配 (if 字段)
+    alt Hook 阻止
+        PH--&gt;&gt;M: blocking error
+    else Hook 修改输入
+        PH-&gt;&gt;P: updatedInput
+    else Hook 批准
+        PH-&gt;&gt;P: allow (但不绕过 deny 规则)
+    end
+    P-&gt;&gt;P: deny规则 → ask规则 → 模式检查
+    alt 权限拒绝
+        P--&gt;&gt;M: 拒绝消息 + 建议
+    end
+    P-&gt;&gt;S: 命令包装 (仅 BashTool)
+    S-&gt;&gt;S: wrapWithSandbox()
+    S-&gt;&gt;T: 沙盒化命令
+    T-&gt;&gt;T: 实际执行
+    T-&gt;&gt;AH: 执行结果
+    AH-&gt;&gt;AH: 审计日志 / 输出修改
+    AH--&gt;&gt;M: 最终 tool_result
+</code></pre>
+<p>下面用传统流程图展示同样的过程：</p>
+<pre><code>用户/模型请求工具调用
+    │
+    v
+┌─────────────────────────┐
+│ 1. validateInput()       │  结构验证（必填字段、范围）
+│    使用 Zod Schema       │
+└────────┬────────────────┘
+         │ 通过
+         v
+┌─────────────────────────┐
+│ 2. checkPermissions()    │  工具特定的权限逻辑
+│    返回 allow/ask/deny   │
+└────────┬────────────────┘
+         │ 未被拒绝
+         v
+┌─────────────────────────┐
+│ 3. Rule-Based Perms      │  设置中的 allow/deny/ask 规则
+│    checkRuleBasedPerms() │
+└────────┬────────────────┘
+         │ 未被拒绝
+         v
+┌─────────────────────────┐
+│ 4. PreToolUse Hooks      │  用户定义的 Hook
+│    可批准或阻止           │
+└────────┬────────────────┘
+         │ 未被阻止
+         v
+┌─────────────────────────┐
+│ 5. User Prompt/Classifier│  最终审批（或自动分类器）
+│    auto 模式：YOLO 分类器│
+└────────┬────────────────┘
+         │ 批准
+         v
+┌─────────────────────────┐
+│ 6. call()                │  实际执行工具
+│    返回 ToolResult       │
+└────────┬────────────────┘
+         │
+         v
+┌─────────────────────────┐
+│ 7. PostToolUse Hooks     │  执行后回调
+│    审计日志、通知等       │
+└─────────────────────────┘
+</code></pre>
+<h3 id="45-hook">4.5 工具执行管道（含 Hook 集成的真实代码）</h3>
+<p>工具执行不仅仅是调用 <code>tool.call()</code>——它是一个多步管道，每一步都可能改变行为：</p>
+<pre><code class="language-typescript">// src/services/tools/toolExecution.ts — 真实的执行管道
+async function checkPermissionsAndCallTool(
+  tool: Tool,
+  toolUseID: string,
+  input: Record&lt;string, unknown&gt;,
+  toolUseContext: ToolUseContext,
+  canUseTool: CanUseToolFn,
+  assistantMessage: AssistantMessage,
+  onToolProgress: (progress: ToolProgress) =&gt; void,
+): Promise&lt;MessageUpdate[]&gt; {
+
+  // ===== 步骤 1: Zod Schema 验证 =====
+  const parsedInput = tool.inputSchema.safeParse(input)
+  if (!parsedInput.success) {
+    return [{ message: createUserMessage({
+      content: formatZodValidationError(tool.name, parsedInput.error),
+    }) }]
+  }
+
+  // ===== 步骤 2: 工具特定验证 =====
+  const isValidCall = await tool.validateInput?.(parsedInput.data, toolUseContext)
+  if (isValidCall?.result === false) {
+    return [{ message: createUserMessage({
+      content: isValidCall.message,
+    }) }]
+  }
+
+  // ===== 步骤 3: PreToolUse Hook =====
+  // Hook 可以：批准、阻止、修改输入、注入上下文
+  let processedInput = parsedInput.data
+  let hookPermissionResult: PermissionResult | undefined
+  for await (const result of runPreToolUseHooks(...)) {
+    switch (result.type) {
+      case 'hookPermissionResult':
+        hookPermissionResult = result.hookPermissionResult
+        break
+      case 'hookUpdatedInput':
+        processedInput = result.updatedInput  // Hook 修改了输入！
+        break
+    }
+  }
+
+  // ===== 步骤 4: 权限解析（Hook + Rules 交互）=====
+  // 关键设计：Hook 的 'allow' 不绕过 settings.json 的 deny/ask 规则
+  const { decision, input: callInput } = await resolveHookPermissionDecision(
+    hookPermissionResult, tool, processedInput,
+    toolUseContext, canUseTool, assistantMessage, toolUseID,
+  )
+  if (decision.behavior !== 'allow') {
+    return [/* 权限被拒绝的消息 */]
+  }
+
+  // ===== 步骤 5: 实际执行工具 =====
+  let toolResult = await tool.call(
+    callInput, toolUseContext, canUseTool,
+    assistantMessage, onToolProgress,
+  )
+
+  // ===== 步骤 6: PostToolUse Hook =====
+  // Hook 可以：修改 MCP 工具输出、注入额外上下文
+  for await (const result of runPostToolUseHooks(...)) {
+    if (result.updatedMCPToolOutput) {
+      toolResult = { ...toolResult, data: result.updatedMCPToolOutput }
+    }
+  }
+
+  // ===== 步骤 7: 转换为 API 格式并返回 =====
+  return resultingMessages
+}
+</code></pre>
+<p><strong>Hook 权限决策解析</strong>（这是最微妙的部分）：</p>
+<pre><code class="language-typescript">// src/services/tools/toolHooks.ts — 真实代码
+export async function resolveHookPermissionDecision(
+  hookPermissionResult, tool, input, toolUseContext,
+  canUseTool, assistantMessage, toolUseID,
+) {
+  if (hookPermissionResult?.behavior === 'allow') {
+    // Hook 说&quot;允许&quot;——但这不是最终判决！
+    // deny/ask 规则仍然适用（安全不可变量）
+
+    // 如果工具需要用户交互，且 Hook 提供了 updatedInput，
+    // 那么 Hook 就是&quot;用户交互&quot;（如 headless 包装器）
+    const interactionSatisfied =
+      tool.requiresUserInteraction?.() &amp;&amp;
+      hookPermissionResult.updatedInput !== undefined
+
+    // 即使 Hook 允许，仍检查规则
+    const ruleCheck = await checkRuleBasedPermissions(tool, input, toolUseContext)
+    if (ruleCheck?.behavior === 'deny') {
+      // Deny 规则覆盖 Hook 的 allow！
+      return { decision: ruleCheck, input }
+    }
+    if (ruleCheck?.behavior === 'ask') {
+      // Ask 规则仍需要对话框
+      return { decision: await canUseTool(...), input }
+    }
+
+    // 无规则阻止 → Hook 的 allow 生效
+    return { decision: hookPermissionResult, input }
+  }
+  // ... deny 和 ask 处理
+}
+</code></pre>
+<p><strong>核心安全不变量</strong>：<code>deny &gt; settings rules &gt; hook allow</code>。即使 Hook 批准了操作，settings.json 中的 deny 规则仍然阻止它。这防止了恶意 Hook 绕过安全策略。</p>
+<blockquote>
+<p><strong>为什么 Hook allow 不能绕过 deny 规则？</strong> 这是一个真实的安全考量。想象你安装了一个第三方 MCP 服务器，它提供了一个 PreToolUse Hook，对所有操作返回 <code>allow</code>。如果 Hook allow 能绕过 deny 规则，这个第三方代码就获得了超越你安全策略的权限——它可以让 Agent 执行你明确禁止的操作。Claude Code 的设计保证了：<strong>你在 settings.json 中写的 deny 规则是不可绕过的底线</strong>，无论有什么 Hook 介入。</p>
+</blockquote>
+<h3 id="46-fileedittool">4.6 FileEditTool 字符串替换算法</h3>
+<p>FileEditTool 的核心算法值得单独分析——它处理了<strong>智能引号匹配</strong>，这是一个真实的工程挑战：</p>
+<pre><code class="language-typescript">// src/tools/FileEditTool/utils.ts — 真实代码
+
+// 问题：模型有时生成 &quot;curly quotes&quot;（智能引号）
+// 但文件中是 &quot;straight quotes&quot;（直引号），或反之
+const LEFT_DOUBLE_CURLY_QUOTE = '\u201C'   // &quot;
+const RIGHT_DOUBLE_CURLY_QUOTE = '\u201D'  // &quot;
+
+function normalizeQuotes(str: string): string {
+  return str
+    .replaceAll('\u2018', &quot;'&quot;)   // ' → '
+    .replaceAll('\u2019', &quot;'&quot;)   // ' → '
+    .replaceAll('\u201C', '&quot;')   // &quot; → &quot;
+    .replaceAll('\u201D', '&quot;')   // &quot; → &quot;
+}
+
+// 三阶段查找算法
+function findActualString(fileContent: string, searchString: string): string | null {
+  // 阶段 1: 精确匹配
+  if (fileContent.includes(searchString)) return searchString
+
+  // 阶段 2: 引号规范化匹配
+  const normalizedSearch = normalizeQuotes(searchString)
+  const normalizedFile = normalizeQuotes(fileContent)
+  const searchIndex = normalizedFile.indexOf(normalizedSearch)
+  if (searchIndex !== -1) {
+    // 返回文件中的 **原始** 字符串（保留原始引号风格）
+    return fileContent.substring(searchIndex, searchIndex + searchString.length)
+  }
+
+  return null
+}
+
+// 替换算法
+function applyEditToFile(
+  originalContent: string,
+  oldString: string,
+  newString: string,
+  replaceAll: boolean = false,
+): string {
+  const f = replaceAll
+    ? (content, search, replace) =&gt; content.replaceAll(search, () =&gt; replace)
+    : (content, search, replace) =&gt; content.replace(search, () =&gt; replace)
+
+  if (newString !== '') return f(originalContent, oldString, newString)
+
+  // 边界情况：删除操作
+  // 如果 oldString 不以换行结尾，但文件中 oldString 后面紧跟换行，
+  // 同时删除那个换行（防止留下空行）
+  const stripTrailingNewline =
+    !oldString.endsWith('\n') &amp;&amp; originalContent.includes(oldString + '\n')
+
+  return stripTrailingNewline
+    ? f(originalContent, oldString + '\n', newString)
+    : f(originalContent, oldString, newString)
+}
+</code></pre>
+<p><strong>设计智慧</strong>：使用 <code>() =&gt; replace</code> 而非直接传递 <code>replace</code> 字符串。这防止了替换字符串中的 <code>$1</code>, <code>$&amp;</code> 等特殊模式被 JavaScript 的正则替换机制误解释。一个微妙但关键的防御。</p>
+<h3 id="47">4.7 定量分析：工具执行的性能特征</h3>
+<table>
+<thead>
+<tr>
+<th>执行模式</th>
+<th>场景</th>
+<th>延迟模型</th>
+<th>实际表现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>StreamingToolExecutor 并发</strong></td>
+<td>10 个 Read 工具</td>
+<td>O(max(t_i))</td>
+<td>~50ms（最慢文件读取时间）</td>
+</tr>
+<tr>
+<td><strong>StreamingToolExecutor 串行</strong></td>
+<td>1 个 Write 后 1 个 Read</td>
+<td>O(Σt_i)</td>
+<td>~80ms（写+读顺序）</td>
+</tr>
+<tr>
+<td><strong>runTools 并发批次</strong></td>
+<td>5 Read + 1 Write + 3 Read</td>
+<td>O(max(5)) + O(1) + O(max(3))</td>
+<td>~130ms</td>
+</tr>
+<tr>
+<td><strong>内部回调 Hook 快速路径</strong></td>
+<td>PostToolUse（全为内部 Hook）</td>
+<td>O(n) 但极快</td>
+<td>~1.8µs（优化后）</td>
+</tr>
+<tr>
+<td><strong>外部 Hook 执行</strong></td>
+<td>PreToolUse command Hook</td>
+<td>O(hook_timeout)</td>
+<td>5-30s（取决于脚本）</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>源码批注</strong>：关于内部 Hook 快速路径，源码注释道：<em>"Fast-path: all hooks are internal callbacks (sessionFileAccessHooks, attributionHooks). These return {} and don't use the abort signal... Measured: 6.01µs → ~1.8µs per PostToolUse hit (-70%)."</em> 这个 70% 的性能提升来自跳过 span/progress/abortSignal/JSON 解析——对于每次工具调用都要触发的 PostToolUse Hook，这种微优化累积效果显著。</p>
+</blockquote>
+<p><img alt="Tool Categories" src="../images/ch4_tool_categories.png" />
+<em>图 4-2: 43+ 工具的类别分布 — Core I/O（6 个）是使用频率最高的工具，Advanced（6 个）则通过 feature gate 按需加载。</em></p>
+<p><img alt="Tool Capability Radar" src="../images/ch4_tool_radar.png" />
+<em>图 4-3: 核心工具能力雷达图 — 展示并发安全性、只读性、破坏性等维度。FileReadTool 和 GrepTool 是"最安全"的工具（并发安全 + 只读），BashTool 是"最危险"的（可破坏 + 非只读 + 非并发安全）。</em></p>
+<p><img alt="Tool Latency" src="../images/ch4_tool_latency.png" />
+<em>图 4-4: 工具执行延迟分布（对数刻度）— 从内部 Hook 的 2µs 到 Agent Explore 的 15 秒，延迟跨越 7 个数量级。这解释了为什么 StreamingToolExecutor 的并发优化如此重要——在多工具场景下，它将总延迟从所有工具之和降为最慢工具的时间。</em></p>
+<h3 id="48">4.8 工具分类</h3>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>工具</th>
+<th>特性</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>核心 I/O</strong></td>
+<td>BashTool, FileReadTool, FileWriteTool, FileEditTool, GlobTool, GrepTool</td>
+<td>始终加载</td>
+</tr>
+<tr>
+<td><strong>Agent</strong></td>
+<td>AgentTool, SendMessageTool, TeamCreateTool, TeamDeleteTool</td>
+<td>子 Agent 生成与管理</td>
+</tr>
+<tr>
+<td><strong>工作流</strong></td>
+<td>WebFetchTool, WebSearchTool, NotebookEditTool</td>
+<td>外部资源访问</td>
+</tr>
+<tr>
+<td><strong>任务</strong></td>
+<td>TaskCreateTool, TaskUpdateTool, TaskListTool, TaskOutputTool, TaskStopTool</td>
+<td>任务管理</td>
+</tr>
+<tr>
+<td><strong>计划</strong></td>
+<td>EnterPlanModeTool, ExitPlanModeTool, TodoWriteTool</td>
+<td>计划模式</td>
+</tr>
+<tr>
+<td><strong>高级</strong></td>
+<td>ScheduleCronTool, SleepTool, MonitorTool, REPLTool</td>
+<td>特性门控</td>
+</tr>
+<tr>
+<td><strong>Worktree</strong></td>
+<td>EnterWorktreeTool, ExitWorktreeTool</td>
+<td>Git worktree 隔离</td>
+</tr>
+<tr>
+<td><strong>MCP</strong></td>
+<td>MCPTool, ListMcpResourcesTool, ReadMcpResourceTool</td>
+<td>MCP 协议</td>
+</tr>
+<tr>
+<td><strong>搜索</strong></td>
+<td>ToolSearchTool</td>
+<td>延迟工具发现</td>
+</tr>
+</tbody>
+</table>
+<h3 id="46-tool-deferral">4.6 工具延迟加载（Tool Deferral）</h3>
+<pre><code class="language-typescript">// 并非所有工具都在第一轮加载
+// shouldDefer = true 的工具不发送给模型
+// 直到 ToolSearchTool 被调用发现它们
+
+// 例：NotebookEditTool
+{
+  name: 'NotebookEdit',
+  shouldDefer: true,        // 第一轮不加载
+  searchHint: 'jupyter notebook cell edit insert',
+  alwaysLoad: false,
+}
+
+// 例：BashTool
+{
+  name: 'Bash',
+  shouldDefer: false,       // 始终加载
+  alwaysLoad: true,         // 永不延迟
+}
+</code></pre>
+<p><strong>设计哲学</strong>：</p>
+<p>模型的工具定义占用 token 预算。43+ 个工具全部加载会消耗大量上下文空间。通过延迟加载，第一轮只加载核心工具（~15 个），其余通过 ToolSearch 按需发现。这是<strong>上下文工程</strong>的典型应用。</p>
+<hr />
+<h2 id="permission-model">第五章：Permission Model — 约束架构</h2>
+<blockquote>
+<p>回想一下第一章的"驯马"比喻。到目前为止，我们的马（Agent）有了发动机（Loop）和操控系统（Tools）。但如果它能自由奔跑、随意踩踏庄稼呢？我们需要围栏——这就是权限模型。</p>
+<p>这是 Harness Engineering 最核心的"约束"支柱。一个设计良好的权限模型不是给 Agent "加限制"——而是给 Agent "减少犯错的可能性"。Claude Code 的权限系统是业界最成熟的实现之一，它揭示了一个反直觉的真理：<strong>约束越精确，Agent 越自由</strong>。因为当你能精确控制风险时，你敢让 Agent 做更多事情。</p>
+</blockquote>
+<p>权限模型是 Harness 的"安全阀"。它决定 Agent 能做什么、不能做什么、需要询问什么。</p>
+<h3 id="51">5.1 五种权限模式</h3>
+<pre><code class="language-typescript">type PermissionMode =
+  | 'default'            // 敏感操作始终询问
+  | 'acceptEdits'        // 自动批准文件编辑，其他询问
+  | 'bypassPermissions'  // 自动批准一切（危险）
+  | 'dontAsk'           // 自动拒绝需要询问的操作
+  | 'plan'              // 计划模式限制（只读 + 计划文件）
+  | 'auto'              // AI 分类器自动审批（实验性）
+  | 'bubble';           // 冒泡到父 Agent（子 Agent 用）
+</code></pre>
+<p><strong>设计哲学</strong>：</p>
+<p>模式不是二元的（允许/禁止），而是一个<strong>光谱</strong>。<code>default</code> 是最安全的，适合新用户；<code>bypassPermissions</code> 适合信任环境中的自动化；<code>auto</code> 是最有趣的——它使用一个两阶段 AI 分类器来判断操作是否安全。</p>
+<blockquote>
+<p><strong>类比</strong>：权限模式就像开车时的驾驶辅助系统。<code>default</code> 相当于新手模式——每次变道都要你确认。<code>acceptEdits</code> 相当于自适应巡航——直行自动，转弯手动。<code>bypassPermissions</code> 相当于完全自动驾驶——你完全信任系统。<code>auto</code> 最有趣——它是一个AI驾驶员在帮你开车，但它自己也有一个"安全员"（YOLO 分类器）在监督它。</p>
+</blockquote>
+<h3 id="52">5.2 三级规则系统</h3>
+<pre><code class="language-typescript">type PermissionRule = {
+  source: PermissionRuleSource;  // 规则来源
+  ruleBehavior: 'allow' | 'deny' | 'ask';
+  ruleValue: {
+    toolName: string;       // 例: &quot;Bash&quot;, &quot;Write&quot;, &quot;mcp__server&quot;
+    ruleContent?: string;   // 例: &quot;git *&quot;, &quot;*.ts&quot;, &quot;prefix:npm *&quot;
+  };
+};
+</code></pre>
+<p><strong>规则语法示例</strong>：</p>
+<pre><code># 允许所有 git 命令
+Bash(git *)
+
+# 允许写入 TypeScript 文件
+Write(*.ts)
+
+# 拒绝所有 MCP 服务器工具
+mcp__*
+
+# 允许读取任何文件
+Read
+
+# 拒绝 rm -rf 命令
+Bash(rm -rf *)
+
+# 允许特定 MCP 服务器的所有工具
+mcp__my-server(*)
+</code></pre>
+<h3 id="53">5.3 纵深防御模型</h3>
+<p><img alt="Defense in Depth" src="../images/04_defense_in_depth.png" />
+<em>图 5-1: 纵深防御六层安全模型 — 从软约束（CLAUDE.md，~95% 遵守率）到硬约束（硬编码拒绝，100% 不可绕过），层层叠加使整体绕过概率趋近于零。</em></p>
+<p>在深入具体的权限规则之前，先从宏观视角理解 Claude Code 的六层安全架构。这是整个 Harness 最重要的设计模式之一：</p>
+<pre><code class="language-mermaid">flowchart TB
+    subgraph Layer1[&quot;第 1 层: CLAUDE.md（指导性约束）&quot;]
+        direction LR
+        L1[&quot;告诉 Agent '不要修改 migrations/ 目录'&quot;]
+    end
+    subgraph Layer2[&quot;第 2 层: Permission Rules（声明性约束）&quot;]
+        direction LR
+        L2[&quot;settings.json 中的 allow/deny/ask 规则&quot;]
+    end
+    subgraph Layer3[&quot;第 3 层: Hooks（可编程约束）&quot;]
+        direction LR
+        L3[&quot;PreToolUse 脚本检查操作合法性&quot;]
+    end
+    subgraph Layer4[&quot;第 4 层: YOLO Classifier（AI 约束）&quot;]
+        direction LR
+        L4[&quot;独立 AI 模型审查操作安全性&quot;]
+    end
+    subgraph Layer5[&quot;第 5 层: Sandbox（系统级约束）&quot;]
+        direction LR
+        L5[&quot;操作系统级文件/网络隔离&quot;]
+    end
+    subgraph Layer6[&quot;第 6 层: Hardcoded Denials（不可覆盖约束）&quot;]
+        direction LR
+        L6[&quot;settings.json 始终不可写，无法通过配置禁用&quot;]
+    end
+
+    Layer1 --&gt; Layer2 --&gt; Layer3 --&gt; Layer4 --&gt; Layer5 --&gt; Layer6
+
+    classDef soft fill:#dbeafe,stroke:#2563eb,color:#1e3a5f
+    classDef medium fill:#fef9c3,stroke:#ca8a04,color:#713f12
+    classDef hard fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+
+    class Layer1 soft
+    class Layer2,Layer3 medium
+    class Layer4 medium
+    class Layer5,Layer6 hard
+</code></pre>
+<blockquote>
+<p><strong>分析</strong>：注意颜色渐变——从蓝色（软约束，可被忽略）到黄色（中等约束，可被配置覆盖）到红色（硬约束，不可绕过）。在工程实践中，第 1 层（CLAUDE.md）的遵守率约 95%——模型有时会"忘记"。但第 6 层的遵守率是 100%，因为它在代码中硬编码。这种渐变设计意味着：<strong>你不需要每一层都完美，只要层层叠加的概率足够低</strong>。如果每一层有 5% 的绕过率，6 层叠加后绕过概率是 0.05^6 ≈ 0.000000002%。</p>
+</blockquote>
+<h3 id="54-7">5.4 设置层级（7 级优先级）</h3>
+<p>规则来自多个来源，按优先级从高到低：</p>
+<pre><code>优先级最高
+    ↓
+1. CLI 参数 (cliArg)              — 命令行覆盖
+2. 会话命令 (command)              — /permissions 命令
+3. Flag 设置 (flagSettings)        — CLAUDE_CODE_FLAG_SETTINGS
+4. 策略设置 (policySettings)       — 组织策略
+5. 本地设置 (localSettings)        — .claude/settings.json.local
+6. 项目设置 (projectSettings)      — .claude/settings.json
+7. 用户设置 (userSettings)         — ~/.claude/settings.json
+    ↓
+优先级最低
+</code></pre>
+<p><strong>加上企业管理设置</strong>：</p>
+<pre><code>Managed Settings（MDM/企业）:
+├── /managed/managed-settings.json        — 基础管理设置
+├── /managed/managed-settings.d/*.json    — Drop-in 覆盖
+└── macOS plutil / Windows Registry       — 操作系统级 MDM
+</code></pre>
+<p><strong>设计哲学</strong>：</p>
+<p>层级化设置允许在<strong>不修改用户设置</strong>的情况下在组织层面施加策略。企业管理员可以通过 MDM（移动设备管理）锁定某些权限，项目维护者可以在项目设置中定义合理默认值，而个人用户可以在此基础上微调。</p>
+<pre><code class="language-mermaid">flowchart BT
+    U[&quot;用户设置\n~/.claude/settings.json\n优先级最低&quot;] --&gt; P[&quot;项目设置\n.claude/settings.json&quot;]
+    P --&gt; L[&quot;本地设置\n.claude/settings.json.local\n不提交 git&quot;]
+    L --&gt; Po[&quot;策略设置\n组织策略&quot;]
+    Po --&gt; M[&quot;管理设置\nMDM/企业\n可锁定&quot;]
+    M --&gt; F[&quot;Flag 设置\n环境变量&quot;]
+    F --&gt; C[&quot;CLI 参数\n优先级最高&quot;]
+
+    classDef low fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef mid fill:#fef9c3,stroke:#ca8a04,color:#713f12
+    classDef high fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+
+    class U,P low
+    class L,Po mid
+    class M,F,C high
+</code></pre>
+<blockquote>
+<p><strong>分析：信任层级与覆盖方向</strong></p>
+<p>注意箭头方向是从下到上——低优先级在底部，高优先级在顶部。这不是偶然的：<strong>越接近"运行时"的设置，优先级越高</strong>。用户设置是"最远的"（编辑一次，长期使用），CLI 参数是"最近的"（每次运行都可以不同）。这种设计让你可以用 CLI 参数临时覆盖任何设置，而不用修改文件。</p>
+<p>另一个关键设计：<code>lockedByPolicy: true</code> 可以让管理员锁定沙盒设置，使得用户无法禁用。源码注释提到这是<em>"Added to unblock NVIDIA enterprise rollout"</em>——一个真实的企业客户需求驱动了这个特性。</p>
+</blockquote>
+<h3 id="54">5.4 权限决策管道（真实源码）</h3>
+<p>以下是 <code>src/utils/permissions/permissions.ts</code> 中真实的权限管道，注释揭示了每个决策的原因：</p>
+<pre><code class="language-typescript">// src/utils/permissions/permissions.ts — 真实代码
+async function hasPermissionsToUseToolInner(
+  tool: Tool, input: Record&lt;string, unknown&gt;, context: ToolUseContext,
+): Promise&lt;PermissionDecision&gt; {
+
+  if (context.abortController.signal.aborted) throw new AbortError()
+
+  let appState = context.getAppState()
+
+  // ===== 1a. 整个工具被 Deny =====
+  const denyRule = getDenyRuleForTool(appState.toolPermissionContext, tool)
+  if (denyRule) {
+    return { behavior: 'deny', decisionReason: { type: 'rule', rule: denyRule },
+      message: `Permission to use ${tool.name} has been denied.` }
+  }
+
+  // ===== 1b. 整个工具被 Ask =====
+  const askRule = getAskRuleForTool(appState.toolPermissionContext, tool)
+  if (askRule) {
+    // 特殊情况：沙盒自动允许
+    // 当 autoAllowBashIfSandboxed 开启时，沙盒化的命令跳过 ask 规则
+    // 不会沙盒化的命令（排除命令、dangerouslyDisableSandbox）仍遵守 ask
+    const canSandboxAutoAllow =
+      tool.name === BASH_TOOL_NAME &amp;&amp;
+      SandboxManager.isSandboxingEnabled() &amp;&amp;
+      SandboxManager.isAutoAllowBashIfSandboxedEnabled() &amp;&amp;
+      shouldUseSandbox(input)
+    if (!canSandboxAutoAllow) {
+      return { behavior: 'ask', decisionReason: { type: 'rule', rule: askRule } }
+    }
+    // 落入下方让 Bash 的 checkPermissions 处理命令级规则
+  }
+
+  // ===== 1c. 工具特定权限检查 =====
+  let toolPermissionResult: PermissionResult = { behavior: 'passthrough' }
+  try {
+    const parsedInput = tool.inputSchema.parse(input)
+    toolPermissionResult = await tool.checkPermissions(parsedInput, context)
+  } catch (e) {
+    if (e instanceof AbortError) throw e
+    logError(e)
+  }
+
+  // ===== 1d. 工具实现拒绝 =====
+  if (toolPermissionResult?.behavior === 'deny') return toolPermissionResult
+
+  // ===== 1e. 需要用户交互的工具 =====
+  if (tool.requiresUserInteraction?.() &amp;&amp; toolPermissionResult?.behavior === 'ask') {
+    return toolPermissionResult
+  }
+
+  // ===== 1f. 内容级 ask 规则（重要！）=====
+  // 当用户配置了内容级 ask 规则如 Bash(npm publish:*)，
+  // tool.checkPermissions 返回 {behavior:'ask', decisionReason:{type:'rule', ruleBehavior:'ask'}}
+  // 这必须被尊重，即使在 bypassPermissions 模式下！
+  if (toolPermissionResult?.behavior === 'ask' &amp;&amp;
+      toolPermissionResult.decisionReason?.type === 'rule' &amp;&amp;
+      toolPermissionResult.decisionReason.rule.ruleBehavior === 'ask') {
+    return toolPermissionResult
+  }
+
+  // ===== 1g. 安全检查（不可绕过）=====
+  // .git/, .claude/, .vscode/, shell 配置等路径
+  // 即使 bypassPermissions 模式也必须提示
+  if (toolPermissionResult?.behavior === 'ask' &amp;&amp;
+      toolPermissionResult.decisionReason?.type === 'safetyCheck') {
+    return toolPermissionResult
+  }
+
+  // ===== 2a. 模式检查 =====
+  appState = context.getAppState()  // 重新获取最新状态
+  const shouldBypassPermissions =
+    appState.toolPermissionContext.mode === 'bypassPermissions' ||
+    (appState.toolPermissionContext.mode === 'plan' &amp;&amp;
+     appState.toolPermissionContext.isBypassPermissionsModeAvailable)
+  if (shouldBypassPermissions) {
+    return { behavior: 'allow', decisionReason: { type: 'mode', mode: '...' } }
+  }
+
+  // ===== 2b. 整个工具被 Allow =====
+  const allowRule = toolAlwaysAllowedRule(appState.toolPermissionContext, tool)
+  if (allowRule) {
+    return { behavior: 'allow', decisionReason: { type: 'rule', rule: allowRule } }
+  }
+
+  // ===== 3. passthrough → ask =====
+  return toolPermissionResult.behavior === 'passthrough'
+    ? { ...toolPermissionResult, behavior: 'ask' }
+    : toolPermissionResult
+}
+
+// ===== 外层包装：模式转换 =====
+export const hasPermissionsToUseTool: CanUseToolFn = async (...) =&gt; {
+  const result = await hasPermissionsToUseToolInner(...)
+
+  // 允许 → 重置连续拒绝计数器
+  if (result.behavior === 'allow') {
+    if (feature('TRANSCRIPT_CLASSIFIER') &amp;&amp; context.mode === 'auto') {
+      persistDenialState(context, recordSuccess(currentDenialState))
+    }
+    return result
+  }
+
+  // ask → 模式转换
+  if (result.behavior === 'ask') {
+    if (appState.toolPermissionContext.mode === 'dontAsk') {
+      return { behavior: 'deny', decisionReason: { type: 'mode', mode: 'dontAsk' } }
+    }
+    // auto 模式 → AI 分类器（见 5.5 节）
+  }
+  return result
+}
+</code></pre>
+<p><strong>权限决策顺序图</strong>：</p>
+<pre><code>                    工具调用请求
+                        │
+          ┌─────────────┼─────────────┐
+          │             │             │
+     Deny 规则?    Ask 规则?     Allow 规则?
+       │ 是            │ 是           │ 是
+       v              │             v
+     拒绝          沙盒可以        允许
+                  自动允许?
+                   │ 否
+                   v
+               tool.checkPermissions()
+                   │
+          ┌────────┼────────┐
+          │        │        │
+        deny     ask      allow/
+          │        │      passthrough
+          v        │        │
+        拒绝    内容级规则?   │
+                 │ 是       │
+                 v         │
+               拒绝/询问   │
+                           │
+                 安全检查?──┤
+                  │ 是     │
+                  v        │
+                 询问      │
+                           │
+              bypassPermissions?
+                  │ 是     │ 否
+                  v        v
+                允许    Allow 规则?
+                         │ 是  │ 否
+                         v     v
+                       允许   ask → 模式转换
+                              ├─ dontAsk → deny
+                              ├─ auto → AI 分类器
+                              └─ default → 用户提示
+</code></pre>
+<h3 id="55">5.5 权限规则解析器（真实源码）</h3>
+<p>规则字符串的解析比看上去复杂——需要处理转义的括号：</p>
+<pre><code class="language-typescript">// src/utils/permissions/permissionRuleParser.ts — 真实代码
+
+// 输入: &quot;Bash(python -c \&quot;print\\(1\\)\&quot;)&quot;
+// 输出: { toolName: &quot;Bash&quot;, ruleContent: &quot;python -c \&quot;print(1)\&quot;&quot; }
+export function permissionRuleValueFromString(ruleString: string): PermissionRuleValue {
+  // 找到第一个 **未转义** 的左括号
+  const openParenIndex = findFirstUnescapedChar(ruleString, '(')
+  if (openParenIndex === -1) {
+    return { toolName: normalizeLegacyToolName(ruleString) }
+  }
+
+  // 找到最后一个 **未转义** 的右括号
+  const closeParenIndex = findLastUnescapedChar(ruleString, ')')
+  if (closeParenIndex === -1 || closeParenIndex &lt;= openParenIndex) {
+    return { toolName: normalizeLegacyToolName(ruleString) }
+  }
+
+  // 右括号必须在末尾
+  if (closeParenIndex !== ruleString.length - 1) {
+    return { toolName: normalizeLegacyToolName(ruleString) }
+  }
+
+  const toolName = ruleString.substring(0, openParenIndex)
+  const rawContent = ruleString.substring(openParenIndex + 1, closeParenIndex)
+
+  // 空内容 &quot;Bash()&quot; 或通配符 &quot;Bash(*)&quot; → 工具级规则
+  if (rawContent === '' || rawContent === '*') {
+    return { toolName: normalizeLegacyToolName(toolName) }
+  }
+
+  // 反转义: \\( → (, \\) → ), \\\\ → \\
+  const ruleContent = unescapeRuleContent(rawContent)
+  return { toolName: normalizeLegacyToolName(toolName), ruleContent }
+}
+
+// 判断字符是否被转义（前面有奇数个反斜杠）
+function findFirstUnescapedChar(str: string, char: string): number {
+  for (let i = 0; i &lt; str.length; i++) {
+    if (str[i] === char) {
+      let backslashCount = 0
+      let j = i - 1
+      while (j &gt;= 0 &amp;&amp; str[j] === '\\') { backslashCount++; j-- }
+      if (backslashCount % 2 === 0) return i  // 偶数个反斜杠 = 未转义
+    }
+  }
+  return -1
+}
+</code></pre>
+<p><strong>MCP 服务器级规则匹配</strong>：</p>
+<pre><code class="language-typescript">// 规则 &quot;mcp__server1&quot; 匹配工具 &quot;mcp__server1__tool1&quot;
+// 规则 &quot;mcp__server1__*&quot; 匹配 server1 的所有工具
+function toolMatchesRule(tool, rule): boolean {
+  if (rule.ruleValue.ruleContent !== undefined) return false  // 内容规则不匹配整个工具
+
+  const nameForRuleMatch = getToolNameForPermissionCheck(tool)
+  if (rule.ruleValue.toolName === nameForRuleMatch) return true
+
+  // MCP 服务器级匹配
+  const ruleInfo = mcpInfoFromString(rule.ruleValue.toolName)
+  const toolInfo = mcpInfoFromString(nameForRuleMatch)
+  return ruleInfo !== null &amp;&amp; toolInfo !== null &amp;&amp;
+    (ruleInfo.toolName === undefined || ruleInfo.toolName === '*') &amp;&amp;
+    ruleInfo.serverName === toolInfo.serverName
+}
+</code></pre>
+<p><img alt="Permission Funnel" src="../images/ch5_permission_funnel.png" />
+<em>图 5-2: 权限决策漏斗 — 100% 的工具调用经过逐层过滤，最终只有 ~11% 需要昂贵的分类器或用户确认。前 4 步过滤掉了 89% 的调用，全部是零成本的规则匹配。</em></p>
+<p><img alt="Defense Probability" src="../images/ch5_defense_probability.png" />
+<em>图 5-3: 纵深防御逐层绕过概率（蓝色柱：单层概率，红色线：累积概率，对数刻度）— 6 层叠加后，累积绕过概率趋近于零。注意第 6 层（硬编码拒绝）的单层概率为 0，使累积概率归零。</em></p>
+<p><img alt="Decision Matrix" src="../images/ch5_decision_matrix.png" />
+<em>图 5-4: 权限决策矩阵热力图 — 5 种权限模式 × 6 种工具类型的决策结果。绿色=ALLOW，橙色=ASK，红色=DENY。注意 <code>auto</code> 模式下 Bash(danger) 仍为 ASK——分类器对高风险操作采取保守策略。</em></p>
+<h3 id="56">5.6 定量分析：权限决策的分布</h3>
+<p>基于 Claude Code 源码中的 analytics 埋点和注释，我们可以推断权限决策的典型分布：</p>
+<table>
+<thead>
+<tr>
+<th>决策路径</th>
+<th>占比（估计）</th>
+<th>延迟</th>
+<th>成本</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Rule-based Allow</strong> (整个工具)</td>
+<td>~40%</td>
+<td>&lt;1ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td><strong>Mode-based Allow</strong> (bypassPermissions)</td>
+<td>~20%</td>
+<td>&lt;1ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td><strong>Safe-tool Allowlist</strong> (auto mode)</td>
+<td>~15%</td>
+<td>&lt;1ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td><strong>Tool checkPermissions Allow</strong></td>
+<td>~10%</td>
+<td>1-5ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td><strong>YOLO Classifier Allow</strong> (fast stage)</td>
+<td>~8%</td>
+<td>50-200ms</td>
+<td>~$0.001</td>
+</tr>
+<tr>
+<td><strong>YOLO Classifier Allow</strong> (thinking stage)</td>
+<td>~3%</td>
+<td>500ms-2s</td>
+<td>~$0.01</td>
+</tr>
+<tr>
+<td><strong>User Prompt</strong> (interactive)</td>
+<td>~3%</td>
+<td>1-30s</td>
+<td>0（等待用户）</td>
+</tr>
+<tr>
+<td><strong>Deny</strong> (rule or classifier)</td>
+<td>~1%</td>
+<td>varies</td>
+<td>varies</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>源码批注</strong>：关于分类器的优化，源码注释道：<em>"Before running the auto mode classifier, check if acceptEdits mode would allow this action. This avoids expensive classifier API calls for safe operations like file edits."</em> 这个快速路径检查估计跳过了 ~35% 的分类器调用。另一段注释提到：<em>"Allowlisted tools are safe and don't need YOLO classification."</em> 这进一步跳过 ~15%。两者叠加意味着只有约 11% 的工具调用真正需要分类器 API 调用。</p>
+<p><strong>性能启示</strong>：权限检查的平均延迟约 5-10ms（加权平均），但方差极大。Rule-based 路径几乎无延迟，而分类器路径可能需要 2 秒。这就是为什么 Claude Code 在 <code>toolExecution.ts</code> 中实现了<strong>推测性预取</strong>——在 PreToolUse Hook 运行的同时，并行启动 Bash 分类器检查。源码注释道：<em>"Speculatively start the bash allow classifier check early so it runs in parallel with pre-tool hooks."</em></p>
+</blockquote>
+<h3 id="57-yolo-auto">5.7 YOLO 分类器（Auto 模式）</h3>
+<p><code>auto</code> 模式使用一个两阶段 AI 分类器来自动审批工具调用：</p>
+<pre><code>阶段 1: Fast 分类器
+├─ 使用较小/快速模型
+├─ 检查：这个操作安全吗？
+├─ 返回 confidence: high/medium/low
+├─ 如果 high confidence + shouldBlock=false → 直接批准
+└─ 如果不确定 → 进入阶段 2
+
+阶段 2: Thinking 分类器
+├─ 使用更大/更深思考的模型
+├─ 分析完整上下文（对话历史 + 工具输入）
+├─ 返回最终判断
+└─ 如果仍不确定 → 降级为用户询问
+
+安全工具快速路径:
+├─ Read, Glob, Grep 等只读工具
+├─ 跳过 API 调用（节省延迟和成本）
+└─ 直接返回 allow
+
+连续拒绝跟踪:
+├─ 如果分类器连续拒绝多次
+├─ 回退到用户提示
+└─ 防止分类器过度保守时卡住
+</code></pre>
+<p><strong>设计哲学</strong>：</p>
+<p>YOLO 分类器体现了 Harness 工程的核心理念——<strong>不信任模型自己判断操作是否安全</strong>。即使主模型认为操作是正确的，一个独立的"看门人"模型会进行二次审查。两阶段设计在速度和安全性之间取得平衡。</p>
+<h3 id="56_1">5.6 权限决策理由追踪</h3>
+<p>每个权限决策都附带详细的理由，用于审计和调试：</p>
+<pre><code class="language-typescript">type PermissionDecisionReason =
+  | { type: 'rule'; rule: PermissionRule }
+  | { type: 'mode'; mode: PermissionMode }
+  | { type: 'classifier'; classifier: string; reason: string }
+  | { type: 'hook'; hookName: string; reason?: string }
+  | { type: 'safetyCheck'; reason: string; classifierApprovable: boolean }
+  // ... 更多变体
+</code></pre>
+<hr />
+<h2 id="hooks-system">第六章：Hooks System — 生命周期可扩展性</h2>
+<blockquote>
+<p>权限模型告诉 Agent "能不能做"，而 Hooks 让你在 Agent "做之前"和"做之后"插入自己的逻辑。</p>
+<p>你可以把 Hooks 想象成机场的安检通道。旅客（工具调用）要通过安检（PreToolUse Hook），通过后可能被贴上标签（PostToolUse Hook），如果行李有问题会被拦下（blocking error）。安检人员可以是人工的（command Hook），也可以是 AI 的（agent Hook），甚至可以是远程的（http Hook）。</p>
+<p>Claude Code 定义了 26 种 Hook 事件和 4 种 Hook 类型——这是目前开源可见的最完整的 Agent 生命周期扩展系统。理解它，你就掌握了让 Harness "可定制"的关键。</p>
+</blockquote>
+<p>Hooks 是 Harness 的<strong>扩展点</strong>。它们允许用户在 Agent 生命周期的关键时刻注入自定义逻辑。</p>
+<h3 id="61-26-hook">6.1 26 个 Hook 事件</h3>
+<pre><code class="language-typescript">// src/types/hooks.ts — 完整的 Hook 事件列表
+type HookEvent =
+  // 工具相关
+  | 'PreToolUse'        // 工具执行前
+  | 'PostToolUse'       // 工具执行后
+  | 'PostToolUseFailure'// 工具执行失败后
+
+  // 权限
+  | 'PermissionRequest' // 权限请求
+  | 'PermissionDenied'  // 权限被拒绝
+
+  // 会话
+  | 'SessionStart'      // 会话开始
+  | 'SessionEnd'        // 会话结束
+  | 'Stop'              // 模型停止
+  | 'StopFailure'       // 停止失败
+
+  // 用户输入
+  | 'UserPromptSubmit'  // 用户提交提示
+
+  // Agent
+  | 'SubagentStart'     // 子 Agent 启动
+  | 'SubagentStop'      // 子 Agent 停止
+  | 'TeammateIdle'      // 队友空闲
+
+  // 任务
+  | 'TaskCreated'       // 任务创建
+  | 'TaskCompleted'     // 任务完成
+
+  // 压缩
+  | 'PreCompact'        // 压缩前
+  | 'PostCompact'       // 压缩后
+
+  // 其他
+  | 'Setup'             // 初始设置
+  | 'Notification'      // 通知
+  | 'Elicitation'       // 信息请求
+  | 'ElicitationResult' // 信息请求结果
+  | 'ConfigChange'      // 配置变更
+  | 'CwdChanged'        // 工作目录变更
+  | 'FileChanged'       // 文件变更
+  | 'WorktreeCreate'    // Worktree 创建
+  | 'WorktreeRemove'    // Worktree 移除
+  | 'InstructionsLoaded'; // 指令加载完成
+</code></pre>
+<p><img alt="Hook Frequency" src="../images/ch6_hook_frequency.png" />
+<em>图 6-1: 26 个 Hook 事件的触发频率估计 — PreToolUse 和 PostToolUse 是最频繁的事件（每次工具调用都触发），SessionStart/End 只在会话边界触发。这解释了为什么 PostToolUse 的内部 Hook 有专门的快速路径优化（-70% 延迟）。</em></p>
+<p><img alt="Hook Cost vs Intelligence" src="../images/ch6_hook_cost_intelligence.png" />
+<em>图 6-2: Hook 类型的成本-智能度散点图 — Command Hook 在左下角（便宜但简单），Agent Hook 在右上角（昂贵但智能）。虚线分隔四个象限：左上是"理想区域"（智能且便宜），右下是"避免区域"（愚蠢且昂贵）。</em></p>
+<h3 id="62-hook">6.2 Hook 生命周期与类型选择</h3>
+<p>选择正确的 Hook 类型是 Harness 定制的关键决策。下图帮助你根据场景选择：</p>
+<pre><code class="language-mermaid">quadrantChart
+    title Hook 类型选择矩阵
+    x-axis &quot;低成本&quot; --&gt; &quot;高成本&quot;
+    y-axis &quot;低智能&quot; --&gt; &quot;高智能&quot;
+    quadrant-1 &quot;Agent Hook&quot;
+    quadrant-2 &quot;Prompt Hook&quot;
+    quadrant-3 &quot;Command Hook&quot;
+    quadrant-4 &quot;HTTP Hook&quot;
+    &quot;规则检查&quot;: [0.15, 0.2]
+    &quot;Lint 运行&quot;: [0.25, 0.15]
+    &quot;安全审查&quot;: [0.6, 0.85]
+    &quot;测试验证&quot;: [0.75, 0.9]
+    &quot;Slack 通知&quot;: [0.7, 0.1]
+    &quot;审计日志&quot;: [0.65, 0.15]
+    &quot;代码质量评分&quot;: [0.45, 0.7]
+    &quot;合规检查&quot;: [0.5, 0.6]
+</code></pre>
+<blockquote>
+<p><strong>解读</strong>：左下角是 Command Hook 的领地——简单、便宜、确定性强（如 lint、grep 检查）。右上角是 Agent Hook——最聪明但最贵（需要完整的 Claude 调用来理解代码语义）。HTTP Hook 在右下——成本中等（网络延迟），但智能低（只是 POST 数据）。Prompt Hook 在中间偏上——单次 LLM 判断，比 Agent 便宜但比脚本聪明。</p>
+</blockquote>
+<h3 id="hook">四种 Hook 类型</h3>
+<h4 id="1-command-hookshell">类型 1: Command Hook（Shell 命令）</h4>
+<pre><code class="language-json">{
+  &quot;type&quot;: &quot;command&quot;,
+  &quot;command&quot;: &quot;npm test -- --bail&quot;,
+  &quot;if&quot;: &quot;Bash(npm *)&quot;,
+  &quot;shell&quot;: &quot;bash&quot;,
+  &quot;timeout&quot;: 30,
+  &quot;statusMessage&quot;: &quot;Running tests...&quot;,
+  &quot;once&quot;: false,
+  &quot;async&quot;: false,
+  &quot;asyncRewake&quot;: false
+}
+</code></pre>
+<p><strong>执行流程</strong>：
+1. 路径转换（Windows: <code>C:\Users\foo</code> → <code>/c/Users/foo</code>）
+2. 变量替换（<code>${CLAUDE_PROJECT_DIR}</code>, <code>${CLAUDE_PLUGIN_ROOT}</code>）
+3. Shell 选择（Bash 或 PowerShell）
+4. JSON 输入写入 stdin
+5. 逐行解析 stdout（检测异步信号和 prompt 请求）
+6. 退出码判断结果</p>
+<p><strong>退出码语义</strong>：
+- <code>0</code>: 成功，stdout 内容可选展示
+- <code>2</code>: 阻止性错误，stderr 展示给模型和用户
+- 其他: 非阻止性错误，stderr 仅展示给用户</p>
+<h4 id="2-prompt-hookllm">类型 2: Prompt Hook（LLM 评估）</h4>
+<pre><code class="language-json">{
+  &quot;type&quot;: &quot;prompt&quot;,
+  &quot;prompt&quot;: &quot;Review this code change for security vulnerabilities: $ARGUMENTS&quot;,
+  &quot;model&quot;: &quot;claude-sonnet-4-6&quot;,
+  &quot;timeout&quot;: 60
+}
+</code></pre>
+<p>使用一个独立的 LLM 调用来评估 Hook 输入。适合需要语义理解的检查（如代码安全审查）。</p>
+<h4 id="3-http-hook">类型 3: HTTP Hook（外部服务）</h4>
+<pre><code class="language-json">{
+  &quot;type&quot;: &quot;http&quot;,
+  &quot;url&quot;: &quot;https://hooks.slack.com/triggers/...&quot;,
+  &quot;headers&quot;: {
+    &quot;Authorization&quot;: &quot;Bearer $SLACK_TOKEN&quot;
+  },
+  &quot;allowedEnvVars&quot;: [&quot;SLACK_TOKEN&quot;],
+  &quot;timeout&quot;: 10
+}
+</code></pre>
+<p>POST JSON 到外部 URL。<code>headers</code> 中的 <code>$VAR_NAME</code> 语法从白名单环境变量插值。<code>allowedEnvVars</code> 限制可访问的环境变量，防止意外泄露。</p>
+<h4 id="4-agent-hookagent">类型 4: Agent Hook（Agent 验证器）</h4>
+<pre><code class="language-json">{
+  &quot;type&quot;: &quot;agent&quot;,
+  &quot;prompt&quot;: &quot;Verify that the test suite passes and no regressions were introduced&quot;,
+  &quot;model&quot;: &quot;claude-sonnet-4-6&quot;,
+  &quot;timeout&quot;: 120
+}
+</code></pre>
+<p>使用一个完整的 Claude Agent（带工具访问）来验证操作。成本最高但最强大——Agent 可以读取文件、运行测试、检查结果。</p>
+<h3 id="63-hook">6.3 Hook 配置结构</h3>
+<pre><code class="language-json">// ~/.claude/settings.json
+{
+  &quot;hooks&quot;: {
+    &quot;PreToolUse&quot;: [
+      {
+        &quot;matcher&quot;: &quot;Write&quot;,
+        &quot;hooks&quot;: [
+          {
+            &quot;type&quot;: &quot;command&quot;,
+            &quot;command&quot;: &quot;eslint --stdin --stdin-filename=$TOOL_INPUT_FILE_PATH&quot;,
+            &quot;if&quot;: &quot;Write(*.ts)&quot;
+          }
+        ]
+      },
+      {
+        &quot;matcher&quot;: &quot;Bash&quot;,
+        &quot;hooks&quot;: [
+          {
+            &quot;type&quot;: &quot;command&quot;,
+            &quot;command&quot;: &quot;echo '{\&quot;decision\&quot;: \&quot;block\&quot;, \&quot;reason\&quot;: \&quot;sudo is not allowed\&quot;}' &quot;,
+            &quot;if&quot;: &quot;Bash(sudo *)&quot;
+          }
+        ]
+      }
+    ],
+    &quot;PostToolUse&quot;: [
+      {
+        &quot;hooks&quot;: [
+          {
+            &quot;type&quot;: &quot;http&quot;,
+            &quot;url&quot;: &quot;https://audit.company.com/log&quot;,
+            &quot;headers&quot;: { &quot;Authorization&quot;: &quot;Bearer $AUDIT_TOKEN&quot; },
+            &quot;allowedEnvVars&quot;: [&quot;AUDIT_TOKEN&quot;]
+          }
+        ]
+      }
+    ],
+    &quot;SessionEnd&quot;: [
+      {
+        &quot;hooks&quot;: [
+          {
+            &quot;type&quot;: &quot;command&quot;,
+            &quot;command&quot;: &quot;git stash&quot;,
+            &quot;timeout&quot;: 10
+          }
+        ]
+      }
+    ]
+  }
+}
+</code></pre>
+<h3 id="64-hook">6.4 Hook 输入/输出协议</h3>
+<p><strong>输入</strong>（通过 stdin 传递的 JSON）：</p>
+<pre><code class="language-typescript">// 所有 Hook 的基础字段
+{
+  session_id: string,
+  transcript_path: string,
+  cwd: string,
+  permission_mode?: string,
+  agent_id?: string,
+  agent_type?: string,
+}
+
+// PreToolUse 特有字段
+{
+  tool_name: &quot;Write&quot;,
+  tool_input: { file_path: &quot;/src/index.ts&quot;, content: &quot;...&quot; },
+  tool_use_id: &quot;toolu_xxx&quot;,
+}
+
+// PostToolUse 特有字段
+{
+  tool_name: &quot;Bash&quot;,
+  tool_input: { command: &quot;npm test&quot; },
+  tool_response: { stdout: &quot;...&quot;, exit_code: 0 },
+  tool_use_id: &quot;toolu_xxx&quot;,
+}
+
+// UserPromptSubmit
+{
+  prompt_text: &quot;Fix the bug in login.ts&quot;,
+}
+
+// SessionStart
+{
+  source: &quot;startup&quot; | &quot;resume&quot; | &quot;clear&quot; | &quot;compact&quot;,
+}
+</code></pre>
+<p><strong>输出</strong>（stdout 返回的 JSON）：</p>
+<pre><code class="language-typescript">type HookJSONOutput = {
+  // 全局控制
+  continue?: boolean;           // false = 停止对话
+  stopReason?: string;
+  decision?: 'approve' | 'block';
+  reason?: string;
+  systemMessage?: string;       // 注入系统消息
+  suppressOutput?: boolean;
+
+  // 权限相关
+  permissionDecision?: 'allow' | 'deny' | 'ask';
+
+  // 事件特定
+  hookSpecificOutput?: {
+    updatedInput?: object;           // 修改工具输入（PreToolUse）
+    additionalContext?: string;       // 注入额外上下文
+    watchPaths?: string[];           // 注册文件监视器
+    updatedMCPToolOutput?: unknown;  // 修改 MCP 工具输出
+    action?: 'accept' | 'decline' | 'cancel';
+  }
+};
+</code></pre>
+<h3 id="65-hook">6.5 Hook 执行引擎深度剖析</h3>
+<p>以下是 <code>src/utils/hooks.ts</code> 中 Hook 执行引擎的真实实现：</p>
+<pre><code class="language-typescript">// src/utils/hooks.ts — 真实代码（简化但保留关键逻辑）
+async function* executeHooks({
+  hookInput, toolUseID, matchQuery, signal, timeoutMs,
+  toolUseContext, messages, forceSyncExecution, requestPrompt,
+}) {
+  // 安全检查 1: 全局禁用
+  if (shouldDisableAllHooksIncludingManaged()) return
+  if (isEnvTruthy(process.env.CLAUDE_CODE_SIMPLE)) return
+
+  // 安全检查 2: 工作空间信任
+  // 所有 Hook 都需要工作空间信任（防止 RCE 漏洞）
+  if (shouldSkipHookDueToTrust()) return
+
+  // 查找匹配的 Hook
+  const matchingHooks = await getMatchingHooks(
+    appState, sessionId, hookEvent, hookInput, tools,
+  )
+  if (matchingHooks.length === 0) return
+
+  // ===== 快速路径优化 =====
+  // 如果所有 Hook 都是内部回调（如 sessionFileAccessHooks、attributionHooks）
+  // 跳过 span/progress/abortSignal/JSON处理 → 性能提升 70%
+  const userHooks = matchingHooks.filter(h =&gt; !isInternalHook(h))
+  if (userHooks.length === 0) {
+    // 6.01µs → ~1.8µs per PostToolUse hit (-70%)
+    for (const { hook } of matchingHooks) {
+      if (hook.type === 'callback') {
+        await hook.callback(hookInput, toolUseID, signal, context)
+      }
+    }
+    return
+  }
+
+  // ===== 并行执行所有 Hook =====
+  // 每个 Hook 有独立的超时
+  // ... 聚合结果 ...
+}
+</code></pre>
+<h4 id="command-hook-shell">Command Hook 的 Shell 执行</h4>
+<pre><code class="language-typescript">// src/utils/hooks.ts — execCommandHook 的关键细节
+async function execCommandHook(hook, hookEvent, hookName, jsonInput, signal, ...) {
+  // 1. Shell 选择
+  // PowerShell: pwsh -NoProfile -NonInteractive -Command
+  // Bash: spawn(command, [], { shell: gitBashPath | true })
+
+  // 2. 变量替换
+  // ${CLAUDE_PROJECT_DIR} → 项目目录
+  // ${CLAUDE_PLUGIN_ROOT} → 插件目录
+  // ${CLAUDE_PLUGIN_DATA} → 插件数据目录
+  // ${user_config.X} → 插件配置值
+
+  // 3. stdin 写入（UTF-8 编码）
+  child.stdin.write(jsonInput + '\n', 'utf8')
+
+  // 4. stdout 逐行解析
+  child.stdout.on('data', data =&gt; {
+    stdout += data
+
+    // ===== Prompt Request 协议 =====
+    // Hook 可以请求用户输入！
+    // 输出行格式: {&quot;prompt&quot;: {&quot;type&quot;: &quot;text&quot;, &quot;message&quot;: &quot;Enter value:&quot;}}
+    if (requestPrompt) {
+      for (const line of lines) {
+        const parsed = jsonParse(line.trim())
+        const validation = promptRequestSchema().safeParse(parsed)
+        if (validation.success) {
+          // 序列化异步 prompt 处理
+          promptChain = promptChain.then(async () =&gt; {
+            const response = await requestPrompt(validation.data)
+            child.stdin.write(jsonStringify(response) + '\n', 'utf8')
+          })
+          continue
+        }
+      }
+    }
+
+    // ===== 异步检测 =====
+    // 第一行输出如果是 {&quot;async&quot;: true, ...}
+    // → 将进程转入后台，主线程继续
+    if (!initialResponseChecked) {
+      const firstLine = firstLineOf(stdout).trim()
+      const parsed = jsonParse(firstLine)
+      if (isAsyncHookJSONOutput(parsed) &amp;&amp; !forceSyncExecution) {
+        executeInBackground({ processId, hookId, ... })
+        shellCommandTransferred = true
+        resolve({ stdout, stderr, output, status: 0 })
+      }
+    }
+  })
+
+  // 5. 等待完成
+  // 关键：等待 stdout 和 stderr 流结束后再认为输出完成
+  // 防止 'close' 事件在所有 'data' 事件处理前触发的竞态条件
+  await Promise.all([stdoutEndPromise, stderrEndPromise])
+
+  // 6. 剥离已处理的 prompt 请求行
+  // 使用内容匹配而非索引，防止索引漂移导致的 prompt JSON 泄露
+  const finalStdout = processedPromptLines.size === 0 ? stdout :
+    stdout.split('\n').filter(line =&gt; !processedPromptLines.has(line.trim())).join('\n')
+
+  return { stdout: finalStdout, stderr, output, status: exitCode }
+}
+</code></pre>
+<p><strong>Hook JSON 输出处理</strong>：</p>
+<pre><code class="language-typescript">// Hook 输出被解析为 JSON，提取决策和副作用
+function processHookJSONOutput({ json, ... }) {
+  const result = {}
+
+  // 全局控制
+  if (json.continue === false) result.preventContinuation = true
+
+  // 决策
+  if (json.decision === 'approve') result.permissionBehavior = 'allow'
+  if (json.decision === 'block') {
+    result.permissionBehavior = 'deny'
+    result.blockingError = { blockingError: json.reason || 'Blocked by hook' }
+  }
+
+  // 事件特定字段
+  if (json.hookSpecificOutput?.hookEventName === 'PreToolUse') {
+    if (json.hookSpecificOutput.updatedInput) {
+      result.updatedInput = json.hookSpecificOutput.updatedInput  // 修改工具输入
+    }
+    result.additionalContext = json.hookSpecificOutput.additionalContext
+  }
+
+  if (json.hookSpecificOutput?.hookEventName === 'PostToolUse') {
+    if (json.hookSpecificOutput.updatedMCPToolOutput) {
+      result.updatedMCPToolOutput = json.hookSpecificOutput.updatedMCPToolOutput
+    }
+  }
+
+  return result
+}
+</code></pre>
+<h3 id="66-hook">6.6 异步 Hook 协议</h3>
+<pre><code class="language-typescript">// Hook 可以通过第一行 JSON 信号异步执行：
+// stdout 第一行: {&quot;async&quot;: true, &quot;asyncTimeout&quot;: 60000}
+// 此后 Hook 在后台运行
+
+// 或通过配置：
+{ type: 'command', command: '...', async: true, asyncRewake: true }
+
+// asyncRewake: 如果退出码为 2，排入通知队列唤醒模型
+// 用例：后台运行测试套件，失败时通知 Agent
+</code></pre>
+<h3 id="66-if">6.6 条件执行（if 字段）</h3>
+<p>Hook 的 <code>if</code> 字段使用与权限规则相同的语法：</p>
+<pre><code class="language-json">// 只对 git 命令运行
+{ &quot;if&quot;: &quot;Bash(git *)&quot; }
+
+// 只对 TypeScript 文件写入运行
+{ &quot;if&quot;: &quot;Write(*.ts)&quot; }
+
+// 只对 npm 命令运行
+{ &quot;if&quot;: &quot;Bash(prefix:npm)&quot; }
+
+// 匹配所有 Bash 调用
+{ &quot;if&quot;: &quot;Bash&quot; }
+</code></pre>
+<p><strong>设计哲学</strong>：</p>
+<p>Hook 系统的设计遵循"<strong>数据驱动的可扩展性</strong>"原则。而不是让用户修改源码，所有定制都通过 <code>settings.json</code> 中的声明性配置完成。四种 Hook 类型覆盖了从简单的 Shell 脚本到完整 Agent 验证的全部场景，退出码语义统一且简单。</p>
+<blockquote>
+<p><strong>实践建议</strong>：如果你是第一次使用 Hooks，从最简单的开始——一个 PreToolUse 的 command hook，打印工具名称和输入。等你熟悉了输入/输出协议，再尝试条件执行（<code>if</code> 字段）和 HTTP 回调。Agent hook 是最强大的，但也最昂贵（每次调用都需要一次完整的 Agent 执行），留到你确实需要"理解代码语义"的场景再用。</p>
+<p><strong>常见陷阱</strong>：不要在 Stop hook 中做太重的操作。如果你的 Stop hook 注入了大量 token（比如一整个测试报告），可能触发 prompt-too-long 错误，而 prompt-too-long 的恢复会跳过 Stop hook（防止死亡螺旋），导致你的逻辑被静默跳过。保持 Stop hook 轻量——如果需要传递大量信息，存到文件里让 Agent 自己读。</p>
+</blockquote>
+<hr />
+<h2 id="sandbox-security">第七章：Sandbox &amp; Security — 安全网</h2>
+<blockquote>
+<p>如果权限模型是围栏，Hooks 是安检，那沙盒就是<strong>物理隔离墙</strong>。前两者是逻辑层面的控制——它们依赖软件正确执行。但软件可能有 bug，逻辑可能被绕过。沙盒则在操作系统层面做隔离：即使 Agent 的代码有漏洞，它也无法访问不该访问的文件或网络。</p>
+<p>这就是安全工程中经典的"纵深防御"（Defense in Depth）原则：不要把安全押在单一机制上，而是层层叠加。Claude Code 有六层防御，沙盒是倒数第二层（最后一层是硬编码拒绝）。</p>
+</blockquote>
+<p>沙盒是 Harness 的最后一道防线。即使权限模型和 Hook 都被绕过，沙盒仍然限制 Agent 能做的事情。</p>
+<h3 id="71">7.1 沙盒架构</h3>
+<pre><code>┌─────────────────────────────────────────────────┐
+│                 Claude Code                      │
+│                                                  │
+│  BashTool.call()                                │
+│      │                                           │
+│      v                                           │
+│  shouldUseSandbox()                              │
+│      │                                           │
+│      ├─ 沙盒是否启用？                            │
+│      ├─ dangerouslyDisableSandbox 是否允许？       │
+│      ├─ 命令是否在排除列表中？                     │
+│      │                                           │
+│      v                                           │
+│  SandboxManager.wrapWithSandbox(command)         │
+│      │                                           │
+│      v                                           │
+│  @anthropic-ai/sandbox-runtime                   │
+│      │                                           │
+│      ├─ 文件系统限制                              │
+│      ├─ 网络限制                                  │
+│      └─ 进程限制                                  │
+│                                                  │
+└─────────────────────────────────────────────────┘
+</code></pre>
+<p><img alt="Sandbox Coverage" src="../images/ch7_sandbox_coverage.png" />
+<em>图 7-1: 沙盒覆盖范围 — Settings Files、Skills Dir 和 Git Config 被 100% 限制（硬编码 DENY），无法通过配置放开。Filesystem Write 限制率 85%（大部分路径受限，仅允许项目目录）。Process Spawn 限制率最低（50%），因为某些命令（如 Docker）需要绕过沙盒。</em></p>
+<h3 id="72">7.2 三大限制维度</h3>
+<h4 id="_3">文件系统限制</h4>
+<pre><code class="language-typescript">interface FsReadRestrictionConfig {
+  allowRead: string[];   // 允许读取的路径模式
+  denyRead: string[];    // 禁止读取的路径模式
+}
+
+interface FsWriteRestrictionConfig {
+  allowWrite: string[];  // 允许写入的路径模式
+  denyWrite: string[];   // 禁止写入的路径模式
+}
+
+// 路径语法:
+// &quot;/path&quot;   — 相对于设置根路径
+// &quot;//path&quot;  — 绝对路径（从根目录开始）
+// &quot;~/path&quot;  — 用户主目录
+// &quot;./path&quot;  — 当前工作目录
+// &quot;*.ext&quot;   — 通配符模式
+</code></pre>
+<p><strong>安全硬编码</strong>：
+- <code>.claude/settings*.json</code> <strong>始终</strong> deny write（防止沙盒逃逸）
+- <code>.claude/skills</code>, <code>.claude/commands</code> <strong>始终</strong> deny write（防止注入恶意代码）
+- 检测裸仓库文件（<code>HEAD</code>, <code>objects</code>, <code>refs</code>）并在命令后清除</p>
+<h4 id="_4">网络限制</h4>
+<pre><code class="language-typescript">interface NetworkRestrictionConfig {
+  allowedDomains: string[];     // 允许的域名模式
+  deniedDomains: string[];      // 禁止的域名模式
+  allowUnixSockets?: boolean;   // Unix socket 访问
+  allowLocalBinding?: boolean;  // 本地端口绑定
+}
+</code></pre>
+<h4 id="_5">命令排除</h4>
+<pre><code class="language-typescript">// settings.sandbox.excludedCommands
+// 匹配模式:
+//   &quot;cmd:&quot;    — 前缀匹配
+//   &quot;cmd&quot;     — 精确匹配
+//   &quot;cmd*&quot;    — 通配符
+
+// 注意: 这 **不是** 安全边界
+// 仅为便利功能（跳过沙盒以避免兼容性问题）
+</code></pre>
+<h3 id="73-cc">7.3 路径解析（CC 特有约定）</h3>
+<p>Claude Code 使用特殊的路径前缀约定，与 sandbox-runtime 的标准路径不同：</p>
+<pre><code class="language-typescript">// src/utils/sandbox/sandbox-adapter.ts — 真实代码
+export function resolvePathPatternForSandbox(
+  pattern: string, source: SettingSource,
+): string {
+  // &quot;//&quot; 前缀 → 从文件系统根目录开始的绝对路径
+  // &quot;//.aws/**&quot; → &quot;/.aws/**&quot;
+  if (pattern.startsWith('//')) {
+    return pattern.slice(1)
+  }
+
+  // &quot;/&quot; 前缀 → 相对于设置文件目录
+  // 权限规则中 &quot;/foo/**&quot; → &quot;${settings_root}/foo/**&quot;
+  if (pattern.startsWith('/') &amp;&amp; !pattern.startsWith('//')) {
+    const root = getSettingsRootPathForSource(source)
+    return resolve(root, pattern.slice(1))
+  }
+
+  // 其他模式（~/path, ./path, path）直接传递
+  // sandbox-runtime 的 normalizePathForSandbox 会处理
+  return pattern
+}
+</code></pre>
+<p><strong>沙盒初始化流程</strong>：</p>
+<pre><code class="language-typescript">// 沙盒初始化是异步的，但必须在第一个命令执行前完成
+async function initialize(sandboxAskCallback?) {
+  if (initializationPromise) return initializationPromise
+  if (!isSandboxingEnabled()) return
+
+  // 包装回调以强制执行 allowManagedDomainsOnly 策略
+  const wrappedCallback = sandboxAskCallback ? async (hostPattern) =&gt; {
+    if (shouldAllowManagedSandboxDomainsOnly()) {
+      logForDebugging(`Blocked: ${hostPattern.host} (allowManagedDomainsOnly)`)
+      return false
+    }
+    return sandboxAskCallback(hostPattern)
+  } : undefined
+
+  // 创建 Promise（在任何 await 之前同步创建，防止竞态条件）
+  initializationPromise = (async () =&gt; {
+    // 检测 worktree 主仓库路径（会话期间不变，缓存）
+    if (worktreeMainRepoPath === undefined) {
+      worktreeMainRepoPath = await detectWorktreeMainRepoPath(getCwdState())
+    }
+
+    const settings = getSettings_DEPRECATED()
+    const runtimeConfig = convertToSandboxRuntimeConfig(settings)
+    await BaseSandboxManager.initialize(runtimeConfig, wrappedCallback)
+
+    // 订阅设置变更，动态更新沙盒配置
+    settingsSubscriptionCleanup = settingsChangeDetector.subscribe(() =&gt; {
+      const newConfig = convertToSandboxRuntimeConfig(getSettings_DEPRECATED())
+      BaseSandboxManager.updateConfig(newConfig)
+    })
+  })()
+
+  return initializationPromise
+}
+</code></pre>
+<h3 id="74">7.4 权限规则到沙盒配置的转换</h3>
+<p>Claude Code 将其权限规则语法转换为 sandbox-runtime 的配置格式：</p>
+<pre><code class="language-typescript">// 权限规则 → 沙盒路径转换
+// Edit(/path/to/dir/*) → sandbox.filesystem.allowWrite
+// Read(/patterns)      → sandbox.filesystem.allowRead
+// WebFetch(domain:example.com) → sandbox.network.allowedDomains
+
+function convertToSandboxConfig(
+  permissionRules: PermissionRule[],
+  sandboxSettings: SandboxSettings,
+): SandboxRuntimeConfig {
+  // 合并权限规则和沙盒设置
+  // 权限规则中的 allow 规则 → sandbox 的 allow 列表
+  // 沙盒设置直接映射
+  // deny 规则始终包含安全硬编码
+}
+</code></pre>
+<h3 id="74_1">7.4 沙盒启用检查</h3>
+<pre><code class="language-typescript">function isSandboxingEnabled(): boolean {
+  return isSupportedPlatform()           // macOS, Linux, WSL2+
+    &amp;&amp; checkDependencies().errors.length === 0  // bubblewrap, socat
+    &amp;&amp; isPlatformInEnabledList()         // sandbox.enabledPlatforms
+    &amp;&amp; getSandboxEnabledSetting();       // 用户设置
+}
+
+// 依赖检查（带缓存）
+function checkDependencies(): { errors: string[], warnings: string[] } {
+  // 检查: bubblewrap 可执行文件
+  // 检查: socat 可执行文件
+  // 检查: cap_setfcap capability
+}
+</code></pre>
+<h3 id="75-dangerouslydisablesandbox">7.5 dangerouslyDisableSandbox</h3>
+<pre><code class="language-typescript">// BashTool 的输入参数
+{
+  command: &quot;docker build .&quot;,
+  dangerouslyDisableSandbox: true  // 跳过沙盒
+}
+
+// 仅当设置允许时生效:
+// settings.sandbox.allowUnsandboxedCommands = true
+
+// 设计意图: 某些命令（如 Docker）不兼容沙盒
+// 但必须显式请求并记录在案
+</code></pre>
+<p><strong>设计哲学</strong>：</p>
+<p>沙盒的设计遵循<strong>纵深防御</strong>（Defense in Depth）原则。即使权限模型允许了一个操作，沙盒仍然限制该操作的"爆炸半径"。关键的安全文件（设置、技能）被硬编码为不可写，这是一个<strong>不依赖配置的安全保障</strong>。</p>
+<blockquote>
+<p><strong>为什么设置文件被硬编码为不可写？</strong> 想象这个场景：Agent 发现沙盒限制了它的操作，于是它"聪明地"修改 <code>settings.json</code> 把沙盒关掉，然后继续。这就是一个<strong>沙盒逃逸</strong>攻击。Claude Code 通过硬编码 deny write <code>.claude/settings*.json</code> 来防止这种情况——即使所有其他安全层都被绕过，这条规则依然生效。这是安全工程中"不可信代码不能修改信任边界"原则的体现。</p>
+</blockquote>
+<hr />
+<h2 id="context-engineering_1">第八章：Context Engineering — 信息管理的艺术</h2>
+<blockquote>
+<p>前面五章讲的都是"Agent 做什么"和"Agent 不能做什么"。这一章换个角度——"Agent 知道什么"。</p>
+<p>想象你是一个新员工，第一天上班。如果没人告诉你公司的代码规范、架构决策、已知 bug，你写的代码大概率不符合要求。Agent 也一样——它的表现直接取决于它能"看到"什么信息。</p>
+<p>Context Engineering 就是管理 Agent "视野"的学科。它回答三个问题：
+1. Agent 应该知道什么？（CLAUDE.md、记忆系统）
+2. 什么时候告诉它？（按需加载、预取）
+3. 信息太多了怎么办？（四级压缩管道）</p>
+<p>Claude Code 在这方面的设计尤为精巧——一个 200 行的记忆索引、一个四级压缩管道、一个并行预取机制，共同构成了业界最精密的 Agent 上下文管理系统。</p>
+</blockquote>
+<p>Context Engineering 是 Harness Engineering 的第一支柱。它管理什么信息在什么时候以什么形式进入模型的上下文窗口。</p>
+<p><img alt="Context Engineering Pipeline" src="../images/05_context_engineering.png" />
+<em>图 8-1: 上下文工程管道 — 信息从多个来源（CLAUDE.md、记忆文件、MCP 指令、环境上下文）流入模型的上下文窗口，经过并行预取、相关性过滤和 Token 预算分配。右侧展示上下文窗口的组成和四级压缩区域。</em></p>
+<h3 id="81">8.1 定量分析：上下文窗口的预算分配</h3>
+<p>Claude Code 的上下文窗口（假设 200K tokens）的典型预算分配：</p>
+<table>
+<thead>
+<tr>
+<th>组成部分</th>
+<th>估计 Token 占比</th>
+<th>大小</th>
+<th>是否压缩</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>系统提示</strong> (base)</td>
+<td>~5-8%</td>
+<td>10-16K</td>
+<td>否（缓存前缀）</td>
+</tr>
+<tr>
+<td><strong>工具定义</strong> (15 核心 + N MCP)</td>
+<td>~8-15%</td>
+<td>16-30K</td>
+<td>否（缓存前缀）</td>
+</tr>
+<tr>
+<td><strong>CLAUDE.md 内容</strong></td>
+<td>~2-5%</td>
+<td>4-10K</td>
+<td>否</td>
+</tr>
+<tr>
+<td><strong>MCP 服务器指令</strong></td>
+<td>~1-3%</td>
+<td>2-6K</td>
+<td>否</td>
+</tr>
+<tr>
+<td><strong>记忆附件</strong></td>
+<td>~1-2%</td>
+<td>2-4K</td>
+<td>否（按需附加）</td>
+</tr>
+<tr>
+<td><strong>对话历史</strong></td>
+<td>~60-80%</td>
+<td>120-160K</td>
+<td>是（四级管道）</td>
+</tr>
+<tr>
+<td><strong>预留空间</strong> (模型输出)</td>
+<td>~5-10%</td>
+<td>10-20K</td>
+<td>N/A</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>关键洞察</strong>：对话历史占 60-80% 的上下文空间，这就是为什么压缩管道如此重要。系统提示和工具定义占 13-23%——这也是为什么工具延迟加载（ToolSearch）有价值：从 43 个工具加载 15 个可以节省 ~8% 的上下文空间，在长对话中这相当于多 16K tokens 的对话历史。</p>
+<p><strong>缓存经济学</strong>：系统提示和工具定义作为缓存前缀（~30-46K tokens）。Anthropic API 的 prompt cache 对前缀匹配的部分不收取输入费用。按 $3/M input tokens 计算，每次 API 调用节省约 $0.0001-0.00014。一个典型会话有 20-50 次 API 调用，总节省约 $0.002-0.007/会话。规模化后（百万级日活），这是显著的成本优化。</p>
+</blockquote>
+<p><img alt="Context Window Allocation" src="../images/ch8_context_allocation.png" />
+<em>图 8-2: 200K 上下文窗口的空间分配 — 对话历史占 70%（140K tokens），是压缩管道的主要目标。系统提示 + 工具定义合计 ~18.5%，这是 prompt cache 的主要受益区域。</em></p>
+<p><img alt="Compaction Efficiency Curve" src="../images/ch8_compaction_curve.png" />
+<em>图 8-3: 四级压缩管道的 Token 增长曲线（50 轮对话）— 红色虚线：无压缩时在第 45 轮突破 200K 限制。紫色线（完整管道）：在第 15 轮触发 Autocompact 后 Token 降至 45K，之后缓慢增长。这使得 Claude Code 可以处理 100+ 轮的长对话而不中断。</em></p>
+<h3 id="82-claudemd">8.2 CLAUDE.md — 项目级持久上下文</h3>
+<p>CLAUDE.md 是 Claude Code 的核心上下文机制。它是一个 Markdown 文件，提供项目级的持久上下文：</p>
+<pre><code class="language-markdown"># CLAUDE.md
+
+## 项目概述
+这是一个 Next.js 14 应用，使用 TypeScript + Tailwind CSS。
+
+## 架构约束
+- 组件放在 src/components/
+- API 路由放在 src/app/api/
+- 不要使用 class 组件
+- 所有 API 调用必须使用 fetch，不要用 axios
+
+## 命名规范
+- 组件：PascalCase
+- 工具函数：camelCase
+- 常量：UPPER_SNAKE_CASE
+
+## 测试
+- 运行测试: npm test
+- 测试框架: Jest + React Testing Library
+- 覆盖率要求: &gt;80%
+
+## 已知问题
+- #123: 登录页面在 Safari 下有布局问题
+- 不要修改 legacy/ 目录下的文件
+</code></pre>
+<p><strong>加载层级</strong>：</p>
+<pre><code>~/.claude/CLAUDE.md              # 全局（所有项目）
+.claude/CLAUDE.md                # 项目级
+.claude/CLAUDE.md.local          # 本地覆盖（不提交 git）
+子目录/CLAUDE.md                 # 目录级（进入时加载）
+</code></pre>
+<h3 id="82">8.2 系统提示构建管道</h3>
+<pre><code class="language-typescript">// src/QueryEngine.ts — 系统提示构建
+function buildSystemPrompt(): SystemPrompt {
+  const parts = [];
+
+  // 1. 基础系统提示（工具描述、行为指南）
+  parts.push(getBaseSystemPrompt());
+
+  // 2. 工具定义
+  for (const tool of tools) {
+    parts.push(tool.prompt(context));
+  }
+
+  // 3. CLAUDE.md 内容
+  parts.push(loadClaudeMd());
+
+  // 4. MCP 服务器指令
+  for (const mcp of mcpClients) {
+    parts.push(mcp.instructions);
+  }
+
+  // 5. 自定义系统提示（用户覆盖）
+  if (customPrompt) parts.push(customPrompt);
+
+  // 6. 记忆机制提示（如有记忆系统）
+  if (memoryEnabled) parts.push(memoryMechanicsPrompt);
+
+  return asSystemPrompt(parts.join('\n'));
+}
+</code></pre>
+<h3 id="83">8.3 记忆系统</h3>
+<p>Claude Code 实现了一个文件基的持久记忆系统，位于 <code>src/memdir/</code>。</p>
+<h4 id="_6">四种记忆类型</h4>
+<pre><code class="language-typescript">type MemoryType =
+  | 'user'       // 用户角色、偏好、知识水平
+  | 'feedback'   // 工作方法指导（什么可做/避免）
+  | 'project'    // 正在进行的工作、目标、倒计时
+  | 'reference'; // 外部系统指针
+</code></pre>
+<h4 id="_7">记忆文件格式</h4>
+<pre><code class="language-markdown">---
+name: user-prefers-terse-responses
+description: 用户不喜欢冗长的总结，希望简洁直接的回复
+type: feedback
+---
+
+不要在每次回复末尾总结刚做的事情——用户可以自己读 diff。
+
+**Why:** 用户明确表示不喜欢尾部总结。
+**How to apply:** 所有回复保持简洁，不加尾部总结段落。
+</code></pre>
+<h4 id="memorymd">记忆索引（MEMORY.md）</h4>
+<pre><code class="language-markdown">- [User Role](user_role.md) — 高级 Go 工程师，React 新手
+- [Terse Responses](feedback_terse.md) — 不要尾部总结
+- [Auth Rewrite](project_auth.md) — 合规驱动的认证中间件重写
+- [Bug Tracker](reference_linear.md) — 管道 bug 在 Linear INGEST 项目
+</code></pre>
+<h4 id="_8">记忆扫描与附加</h4>
+<pre><code class="language-typescript">// src/memdir/memoryScan.ts
+function scanMemories(memoryDir: string): MemoryHeader[] {
+  // 扫描 ~/.claude/memory/ 目录
+  // 读取每个 .md 文件的 frontmatter
+  // 按修改时间排序（最新优先）
+  // 上限: MAX_MEMORY_FILES = 200
+  return headers;
+}
+
+// 与查询循环集成
+// 1. 在流式响应期间开始记忆扫描（预取）
+startRelevantMemoryPrefetch();
+
+// 2. 过滤相关记忆并创建附件消息
+const attachments = getAttachmentMessages(memories, userMessage);
+
+// 3. 附加到用户消息
+messages.push(...attachments);
+</code></pre>
+<h4 id="_9">记忆扫描的真实实现</h4>
+<pre><code class="language-typescript">// src/memdir/memoryScan.ts — 真实代码
+// 单次遍历：stat + read 合并（减少系统调用）
+// 对于常见情况（N ≤ 200），相比先 stat 排序再 read，系统调用减半
+export async function scanMemoryFiles(
+  memoryDir: string, signal: AbortSignal,
+): Promise&lt;MemoryHeader[]&gt; {
+  try {
+    const entries = await readdir(memoryDir, { recursive: true })
+    const mdFiles = entries.filter(
+      f =&gt; f.endsWith('.md') &amp;&amp; basename(f) !== 'MEMORY.md',
+    )
+
+    const headerResults = await Promise.allSettled(
+      mdFiles.map(async (relativePath): Promise&lt;MemoryHeader&gt; =&gt; {
+        const filePath = join(memoryDir, relativePath)
+        // 只读取前 FRONTMATTER_MAX_LINES 行（优化大文件）
+        const { content, mtimeMs } = await readFileInRange(
+          filePath, 0, FRONTMATTER_MAX_LINES, undefined, signal,
+        )
+        const { frontmatter } = parseFrontmatter(content, filePath)
+        return {
+          filename: relativePath,
+          filePath,
+          mtimeMs,
+          description: frontmatter.description || null,
+          type: parseMemoryType(frontmatter.type),
+        }
+      }),
+    )
+
+    return headerResults
+      .filter((r): r is PromiseFulfilledResult&lt;MemoryHeader&gt; =&gt;
+        r.status === 'fulfilled')
+      .map(r =&gt; r.value)
+      .sort((a, b) =&gt; b.mtimeMs - a.mtimeMs)  // 最新优先
+      .slice(0, MAX_MEMORY_FILES)  // 上限 200
+  } catch {
+    return []  // 目录不存在时优雅降级
+  }
+}
+</code></pre>
+<p><strong>记忆清单格式化</strong>：</p>
+<pre><code class="language-typescript">// 用于记忆选择提示和提取 Agent 提示
+export function formatMemoryManifest(memories: MemoryHeader[]): string {
+  return memories.map(m =&gt; {
+    const tag = m.type ? `[${m.type}] ` : ''
+    const ts = new Date(m.mtimeMs).toISOString()
+    return m.description
+      ? `- ${tag}${m.filename} (${ts}): ${m.description}`
+      : `- ${tag}${m.filename} (${ts})`
+  }).join('\n')
+}
+</code></pre>
+<p><strong>设计哲学</strong>：</p>
+<p>记忆系统遵循<strong>显式优于隐式</strong>原则。记忆是结构化的 Markdown 文件（不是数据库），有明确的类型和元数据。MEMORY.md 索引限制在 200 行以内，防止记忆膨胀。记忆扫描与 API 调用<strong>并行执行</strong>（预取），不增加延迟。</p>
+<p><code>Promise.allSettled</code>（而非 <code>Promise.all</code>）确保单个损坏的记忆文件不会导致整个扫描失败——这是防御性编程在 Harness 中的体现。</p>
+<h3 id="84">8.4 上下文压缩策略</h3>
+<p>（详见 3.3 节的四级压缩管道）</p>
+<p>关键补充：</p>
+<pre><code>全转录保存策略:
+├─ 每次 autocompact 前保存完整转录到磁盘
+├─ 路径: ~/.claude/history/&lt;session_id&gt;/
+├─ 用途: --resume 恢复、审计、调试
+└─ 不参与压缩决策（仅备份）
+
+预算跟踪跨压缩:
+├─ taskBudgetRemaining 在压缩前捕获
+├─ 跨多次压缩累计
+└─ 确保总支出不超预算
+</code></pre>
+<h3 id="85">8.5 动态上下文</h3>
+<pre><code class="language-typescript">// src/context.ts — 环境上下文收集
+function collectContext(): UserContext {
+  return {
+    currentDate: new Date(),
+    platform: process.platform,
+    shell: process.env.SHELL,
+    osVersion: getOSVersion(),
+    modelInfo: getModelInfo(),
+    cwd: process.cwd(),
+    gitState: getGitState(),        // 分支、状态、远程
+    terminalSize: getTerminalSize(),
+    // ...更多环境信息
+  };
+}
+</code></pre>
+<hr />
+<h2 id="settings-configuration-harness">第九章：Settings &amp; Configuration — Harness 的可调性</h2>
+<blockquote>
+<p>到目前为止我们看到了循环、工具、权限、Hook、沙盒、上下文——所有这些组件都有参数可以调。但这些参数存放在哪里？谁的设置优先级更高？企业管理员能不能锁定某些设置？</p>
+<p>设置系统是 Harness 的"控制面板"。一个好的控制面板既要让新手开箱即用，又要让高级用户精细调节，还要让企业管理员强制执行策略。Claude Code 用 7 级层级化设置完美解决了这个问题。</p>
+</blockquote>
+<p>设置系统决定了 Harness 的行为如何被调整和定制。</p>
+<h3 id="91-settingsjson">9.1 settings.json 结构</h3>
+<pre><code class="language-json">{
+  // ===== 权限 =====
+  &quot;permissions&quot;: {
+    &quot;allow&quot;: [&quot;Read&quot;, &quot;Glob&quot;, &quot;Grep&quot;, &quot;Bash(git *)&quot;],
+    &quot;deny&quot;: [&quot;Bash(sudo *)&quot;, &quot;Bash(rm -rf *)&quot;],
+    &quot;ask&quot;: [&quot;Write(*.env)&quot;, &quot;Bash(npm publish)&quot;],
+    &quot;defaultMode&quot;: &quot;default&quot;,
+    &quot;additionalDirectories&quot;: [&quot;/shared/libs&quot;],
+    &quot;disableBypassPermissionsMode&quot;: &quot;disable&quot;,
+    &quot;disableAutoMode&quot;: &quot;disable&quot;
+  },
+
+  // ===== Hooks =====
+  &quot;hooks&quot;: {
+    &quot;PreToolUse&quot;: [
+      {
+        &quot;matcher&quot;: &quot;Bash&quot;,
+        &quot;hooks&quot;: [
+          {
+            &quot;type&quot;: &quot;command&quot;,
+            &quot;command&quot;: &quot;check-safety.sh&quot;,
+            &quot;if&quot;: &quot;Bash(rm *)&quot;
+          }
+        ]
+      }
+    ]
+  },
+
+  // ===== 沙盒 =====
+  &quot;sandbox&quot;: {
+    &quot;enabled&quot;: true,
+    &quot;autoAllowBashIfSandboxed&quot;: true,
+    &quot;allowUnsandboxedCommands&quot;: false,
+    &quot;fsRead&quot;: { &quot;allow&quot;: [&quot;**&quot;], &quot;deny&quot;: [&quot;/etc/shadow&quot;] },
+    &quot;fsWrite&quot;: { &quot;allow&quot;: [&quot;./**&quot;], &quot;deny&quot;: [&quot;.env&quot;, &quot;*.key&quot;] },
+    &quot;network&quot;: {
+      &quot;allowedDomains&quot;: [&quot;*.github.com&quot;, &quot;registry.npmjs.org&quot;],
+      &quot;deniedDomains&quot;: [&quot;*.malware.com&quot;]
+    },
+    &quot;excludedCommands&quot;: [&quot;docker&quot;, &quot;podman&quot;],
+    &quot;lockedByPolicy&quot;: false
+  },
+
+  // ===== 其他 =====
+  &quot;model&quot;: &quot;claude-sonnet-4-6&quot;,
+  &quot;env&quot;: {
+    &quot;NODE_ENV&quot;: &quot;development&quot;
+  },
+  &quot;attribution&quot;: &quot;Co-Authored-By: Claude&quot;,
+  &quot;cleanupPeriodDays&quot;: 30,
+  &quot;defaultShell&quot;: &quot;bash&quot;,
+  &quot;allowedMcpServers&quot;: [&quot;@anthropic/mcp-*&quot;],
+  &quot;deniedMcpServers&quot;: [&quot;*-untrusted&quot;]
+}
+</code></pre>
+<h3 id="92">9.2 层级化加载</h3>
+<pre><code class="language-typescript">// src/utils/settings/settings.ts
+function loadSettings(): MergedSettings {
+  // 按优先级从低到高合并
+  const layers = [
+    loadUserSettings(),          // ~/.claude/settings.json
+    loadProjectSettings(),       // .claude/settings.json
+    loadLocalSettings(),         // .claude/settings.json.local
+    loadPolicySettings(),        // 组织策略
+    loadManagedSettings(),       // MDM/企业
+    loadFlagSettings(),          // 环境变量
+    loadCliArgSettings(),        // 命令行参数
+  ];
+
+  return deepMerge(layers);  // 后者覆盖前者
+}
+</code></pre>
+<p><strong>企业管理设置</strong>：</p>
+<pre><code>/managed/managed-settings.json
+├─ 基础管理设置
+├─ 由 MDM（Jamf, Intune 等）分发
+└─ 可锁定沙盒: { &quot;sandbox&quot;: { &quot;lockedByPolicy&quot;: true } }
+
+/managed/managed-settings.d/
+├─ security-policy.json      # 安全策略 drop-in
+├─ compliance-rules.json     # 合规规则 drop-in
+└─ (按字母顺序加载，后者覆盖前者)
+</code></pre>
+<h3 id="93-schema">9.3 Schema 验证</h3>
+<pre><code class="language-typescript">// src/schemas/ — Zod 验证
+const SettingsSchema = z.object({
+  permissions: PermissionsSchema.optional(),
+  hooks: HooksSchema.optional(),
+  sandbox: SandboxSchema.optional(),
+  model: z.string().optional(),
+  env: z.record(z.string()).optional(),
+  // ...
+}).passthrough();  // 保留未知字段（向后兼容）
+</code></pre>
+<p><code>.passthrough()</code> 是一个关键设计决策：旧版设置文件可能包含新版本不识别的字段。<code>passthrough()</code> 保留这些字段而不报错，确保向后兼容。</p>
+<h3 id="94">9.4 深度分析：设置合并算法</h3>
+<p>设置合并看似简单，实际上有精巧的自定义逻辑：</p>
+<pre><code class="language-typescript">// src/utils/settings/settings.ts — 真实代码
+// 数组合并策略：连接 + 去重（而非替换）
+function settingsMergeCustomizer(objValue, srcValue) {
+  if (Array.isArray(objValue) &amp;&amp; Array.isArray(srcValue)) {
+    return mergeArrays(objValue, srcValue)  // concat + uniq
+  }
+  // 非数组：标量覆盖，对象递归合并
+}
+</code></pre>
+<blockquote>
+<p><strong>为什么数组要连接而非替换？</strong> 考虑权限规则：企业策略定义了 <code>deny: ["Bash(sudo *)"]</code>，项目设置定义了 <code>deny: ["Bash(rm -rf *)"]</code>。如果替换，项目的 deny 会覆盖企业的 deny。通过连接去重，最终 deny 列表包含两条规则——这才是正确的安全行为。</p>
+</blockquote>
+<h3 id="95-managed-settings-drop-in">9.5 Managed Settings 的 Drop-in 模式</h3>
+<pre><code class="language-typescript">// 类似 systemd 的 drop-in 目录模式：
+// managed-settings.json        ← 基础（最低优先级）
+// managed-settings.d/
+//   10-otel.json               ← 可观测性团队的配置
+//   20-security.json           ← 安全团队的配置
+//   30-compliance.json         ← 合规团队的配置
+// 按字母序排序合并，后者覆盖前者
+</code></pre>
+<blockquote>
+<p><strong>为什么用 drop-in 而非单文件？</strong> 在大型企业中，不同团队管理不同的配置维度。安全团队负责 deny 规则，平台团队负责 MCP 白名单，合规团队负责数据保留策略。Drop-in 模式让每个团队独立管理自己的配置片段，无需协调编辑同一文件——这和 Linux 系统管理的最佳实践一致。</p>
+</blockquote>
+<h3 id="96">9.6 防御性缓存克隆</h3>
+<pre><code class="language-typescript">// 真实代码：缓存读取时返回克隆副本
+// 原因：lodash 的 mergeWith() 会修改第一个参数
+// 如果直接返回缓存对象，调用者的合并操作会污染缓存
+// 下一个读取者会看到被修改的数据——一个极难调试的 bug
+const cached = getCachedParsedFile(path)
+return cached ? structuredClone(cached) : loadAndCache(path)
+</code></pre>
+<blockquote>
+<p><strong>设计模式分析：宽进严出（Postel's Law）</strong></p>
+<p>这里体现了互联网工程的经典原则——"在接受的东西上要宽容，在发送的东西上要严格"。Settings 文件是用户编辑的，可能包含拼写错误、过时字段、实验性配置。<code>passthrough()</code> 让 Claude Code 在面对这些"不完美"输入时不崩溃，而是静默忽略不认识的字段。这在 Harness Engineering 中尤为重要，因为设置文件会跨版本持久化——用户升级 Claude Code 后，旧设置不应该被新版本拒绝。</p>
+</blockquote>
+<hr />
+<h2 id="mcp-integration-harness">第十章：MCP Integration — 扩展 Harness 的边界</h2>
+<blockquote>
+<p>Claude Code 内置了 43+ 工具，但现实世界的需求是无限的——有人要查数据库，有人要操作 Kubernetes，有人要发 Slack 消息。Anthropic 不可能预见所有需求。</p>
+<p>MCP（Model Context Protocol）就是解决方案：一个标准协议，让任何人都能写一个"工具服务器"，Claude Code 自动发现并使用它的工具。这就像 USB 协议一样——你不需要为每种外设重新设计电脑，只需要一个统一的接口。</p>
+<p>本章我们来看 Claude Code 如何用 6 种传输协议连接 MCP 服务器，以及它如何将外部工具无缝整合到自己的权限和 Hook 体系中。</p>
+</blockquote>
+<p>MCP（Model Context Protocol）允许 Claude Code 连接到外部工具服务器，极大扩展了 Harness 的能力。</p>
+<h3 id="101">10.1 六种传输协议</h3>
+<pre><code class="language-mermaid">flowchart LR
+    CC[Claude Code] --&gt; stdio[&quot;Stdio\n子进程 stdin/stdout&quot;]
+    CC --&gt; sse[&quot;SSE\nServer-Sent Events&quot;]
+    CC --&gt; http[&quot;Streamable HTTP\nHTTP 流&quot;]
+    CC --&gt; ws[&quot;WebSocket\nTLS/代理支持&quot;]
+    CC --&gt; inproc[&quot;InProcess\n内存 TS 模块&quot;]
+    CC --&gt; sdk[&quot;SdkControl\nSDK daemon&quot;]
+
+    stdio --&gt; local[&quot;本地 MCP 服务器\n(filesystem, git)&quot;]
+    sse --&gt; remote[&quot;远程 MCP 服务器\n(Slack, Linear)&quot;]
+    http --&gt; remote
+    ws --&gt; remote
+    inproc --&gt; chrome[&quot;Chrome/Computer Use\n避免 325MB 子进程&quot;]
+    sdk --&gt; daemon[&quot;SDK Daemon\n控制面&quot;]
+
+    classDef transport fill:#dbeafe,stroke:#2563eb,color:#1e3a5f
+    classDef server fill:#dcfce7,stroke:#16a34a,color:#14532d
+
+    class stdio,sse,http,ws,inproc,sdk transport
+    class local,remote,chrome,daemon server
+</code></pre>
+<blockquote>
+<p><strong>源码批注分析</strong>：MCP 客户端实现中有一段关键注释——<em>"Run Chrome MCP server in-process to avoid spawning ~325MB subprocess."</em> 这揭示了 InProcess 传输存在的真正原因：某些 MCP 服务器（如 Chrome 浏览器控制）作为独立进程启动的内存开销过大。通过 InProcess 传输，它们在 Claude Code 进程内运行，共享内存空间。</p>
+</blockquote>
+<pre><code class="language-typescript">// src/services/mcp/client.ts — 六种传输类型
+type MCPTransport =
+  | StdioClientTransport       // 子进程（stdin/stdout）
+  | SSEClientTransport         // Server-Sent Events
+  | StreamableHTTPTransport    // HTTP 流
+  | WebSocketTransport         // WebSocket（支持 TLS/代理）
+  | InProcessTransport         // 内存（TypeScript 模块）
+  | SdkControlTransport;       // SDK daemon 控制
+</code></pre>
+<h3 id="102-mcp">10.2 MCP 配置</h3>
+<pre><code class="language-json">// ~/.claude/mcp.json（全局）
+{
+  &quot;mcpServers&quot;: {
+    &quot;filesystem&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;-y&quot;, &quot;@modelcontextprotocol/server-filesystem&quot;, &quot;/path/to/dir&quot;],
+      &quot;env&quot;: {}
+    },
+    &quot;github&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;-y&quot;, &quot;@modelcontextprotocol/server-github&quot;],
+      &quot;env&quot;: { &quot;GITHUB_TOKEN&quot;: &quot;ghp_...&quot; }
+    }
+  }
+}
+
+// .claude/mcp.json（项目级，与 mcp.json 合并）
+{
+  &quot;mcpServers&quot;: {
+    &quot;database&quot;: {
+      &quot;command&quot;: &quot;python&quot;,
+      &quot;args&quot;: [&quot;mcp_db_server.py&quot;],
+      &quot;env&quot;: { &quot;DB_URL&quot;: &quot;postgresql://...&quot; }
+    }
+  }
+}
+</code></pre>
+<h3 id="103-mcp">10.3 MCP 工具执行</h3>
+<pre><code class="language-typescript">// MCP 工具执行流程
+async function callMcpTool(
+  server: MCPClient,
+  toolName: string,
+  input: object,
+): Promise&lt;ToolResult&gt; {
+  // 1. 调用 MCP 服务器
+  const result = await server.callTool(toolName, input);
+
+  // 2. 处理流式进度
+  if (result.isStreaming) {
+    for await (const progress of result.stream) {
+      yield progress;
+    }
+  }
+
+  // 3. 结果截断和验证
+  const truncated = truncateIfNeeded(result);
+
+  // 4. OAuth token 刷新（如需要）
+  if (result.error?.type === 'auth_error') {
+    await refreshOAuthToken(server);
+    return callMcpTool(server, toolName, input);  // 重试
+  }
+
+  // 5. 二进制内容持久化（大输出）
+  if (isBinaryContent(result)) {
+    await persistBinaryContent(result);
+  }
+
+  return truncated;
+}
+</code></pre>
+<h3 id="104-mcp">10.4 深度分析：MCP 连接生命周期</h3>
+<pre><code class="language-typescript">// src/services/mcp/client.ts — 真实的连接编排
+// getMcpToolsCommandsAndResources() 的核心逻辑：
+
+// 1. 按传输类型分区，不同并发度
+//    本地服务器（stdio）: 低并发（batch ~3），避免进程生成争用
+//    远程服务器（sse/http/ws）: 高并发（batch ~20），仅网络连接
+
+// 2. 三级过滤
+//    Level 1: 禁用检查（settings 中标记为 disabled）
+//    Level 2: 认证缓存检查（15 分钟 TTL 的失败缓存）
+//    Level 3: 实际连接尝试（memoized by name + config hash）
+
+// 3. 流式结果回调（不等所有服务器连接完毕）
+//    每个服务器连接完成后立即回调 onConnectionAttempt()
+//    UI 可以增量渲染已连接的服务器
+</code></pre>
+<blockquote>
+<p><strong>认证缓存的竞态防护</strong>：源码注释说 <em>"Serialize cache writes through a promise chain to prevent concurrent read-modify-write races when multiple servers return 401 in the same batch."</em> 这是一个典型的并发问题——10 个 MCP 服务器同时 401，如果不序列化写入，缓存文件会损坏。解决方案：用 Promise 链序列化所有写操作，读操作共享同一个 memoized Promise。</p>
+</blockquote>
+<h3 id="105-mcp">10.5 MCP 配置去重策略</h3>
+<pre><code>配置来源优先级：
+  手动配置 &gt; 插件自动发现 &gt; Claude.ai 浏览器连接器
+
+去重规则（&quot;同一个服务器&quot;的判定）：
+  stdio 服务器：command 数组完全相同
+  remote 服务器：URL 完全相同
+  名称冲突：后者覆盖前者
+
+企业策略：
+  allowlist + denylist 三种匹配模式：
+    名称匹配：精确服务器名
+    命令匹配：stdio 服务器的 command 数组
+    URL 匹配：通配符模式（https://*/api/* → 正则）
+  denylist 从所有来源合并（永远生效）
+  allowlist 受 shouldAllowManagedMcpServersOnly() 策略控制
+</code></pre>
+<h3 id="106-mcp">10.6 MCP 工具与内置工具的集成</h3>
+<pre><code class="language-typescript">// MCP 工具与内置工具共享同一个工具池
+// assembleToolPool() 将两者合并
+
+// 去重规则: 内置工具优先
+// 如果 MCP 服务器提供了同名工具，内置版本被保留
+
+// Deny 规则同样适用于 MCP 工具
+// 可以在 settings.json 中:
+{
+  &quot;permissions&quot;: {
+    &quot;deny&quot;: [&quot;mcp__untrusted-server&quot;]  // 禁止整个 MCP 服务器
+  },
+  &quot;allowedMcpServers&quot;: [&quot;@official/*&quot;],
+  &quot;deniedMcpServers&quot;: [&quot;*-untrusted&quot;]
+}
+</code></pre>
+<h3 id="105-mcp-skills">10.5 MCP Skills 发现</h3>
+<pre><code class="language-typescript">// 可选特性: MCP_SKILLS
+// 从 MCP 服务器发现并注册 Skills
+// skills/mcpSkills.ts
+
+// MCP 服务器可以暴露 Skills（不仅是 Tools）
+// Skills 是更高级的工作流抽象
+// 通过 skills builder 模式注册
+</code></pre>
+<hr />
+<h2 id="sub-agent-system">第十一章：Sub-Agent System — 多智能体编排</h2>
+<blockquote>
+<p>到目前为止，我们的 Harness 只有一个 Agent。但在复杂任务中，一个 Agent 往往不够——它可能需要同时搜索代码库的不同部分，或者让一个专门的"审查员"检查自己写的代码。</p>
+<p>这就像一家公司：CEO 不能亲自做所有事情，需要把任务委派给团队成员。但委派不是简单的"你去做"——需要明确权限范围（你能访问哪些资源）、信息隔离（不要让一个子任务的垃圾信息污染另一个）、结果汇报（只给我摘要，不要原始数据）。</p>
+<p>Claude Code 的子 Agent 系统正是按这个思路设计的。每个子 Agent 有自己的消息历史、工具集、权限模式和 Token 预算——完全隔离，完成后只返回摘要。</p>
+</blockquote>
+<p><img alt="Multi-Agent Orchestration" src="../images/06_multi_agent.png" />
+<em>图 11-1: 多智能体编排架构 — 父 Agent 通过 AgentTool 生成隔离的子 Agent（Explore/Plan/General/Custom/Fork），每个有独立的消息历史、Token 预算和权限模式。底部展示 Coordinator/Swarm 系统和 Worktree 隔离。</em></p>
+<h3 id="111-agent-tool">11.1 Agent Tool</h3>
+<p>Agent Tool 是 Claude Code 的子 Agent 生成机制，位于 <code>src/tools/AgentTool/</code>。</p>
+<pre><code class="language-typescript">// Agent 定义结构
+interface AgentDefinition {
+  agentType: string;           // 例: &quot;Explore&quot;, &quot;Plan&quot;, &quot;general-purpose&quot;
+  description: string;         // 用途描述
+  whenToUse: string;           // 何时使用
+  tools: string[] | '*';       // 可用工具（'*' = 所有）
+  maxTurns?: number;           // 最大轮次限制
+  model?: string | 'inherit';  // 模型选择
+  permissionMode?: PermissionMode;  // 权限模式
+  getSystemPrompt(): string;   // 系统提示生成
+}
+</code></pre>
+<h3 id="112-agent">11.2 Agent 类型</h3>
+<pre><code>┌──────────────────────────────────────────────────┐
+│                Agent Types                        │
+│                                                   │
+│  general-purpose（通用 Agent）                     │
+│  ├─ 工具: 所有（*)                                │
+│  ├─ 用例: 复杂多步骤任务                          │
+│  └─ 模型: 继承父级                                │
+│                                                   │
+│  Explore（探索 Agent）                             │
+│  ├─ 工具: 只读（Read, Glob, Grep, WebFetch, ...）│
+│  ├─ 用例: 代码库探索、搜索                        │
+│  ├─ 不能: 编辑、写入、运行命令                    │
+│  └─ 三种深度: quick, medium, very thorough        │
+│                                                   │
+│  Plan（规划 Agent）                                │
+│  ├─ 工具: 只读 + Plan 文件写入                    │
+│  ├─ 用例: 设计实现方案                            │
+│  └─ 不能: 执行实际代码修改                        │
+│                                                   │
+│  custom（自定义 Agent）                            │
+│  ├─ 定义: ~/.claude/agents/&lt;name&gt;.md              │
+│  ├─ Frontmatter: tools, model, maxTurns           │
+│  └─ 系统提示: Markdown 正文                       │
+│                                                   │
+│  Fork（隐式分叉 Agent）                            │
+│  ├─ 实验性功能                                    │
+│  ├─ 从父级上下文自动分叉                          │
+│  └─ 继承父级的工具和权限                          │
+│                                                   │
+└──────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="113-agent">11.3 子 Agent 生成流程</h3>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant P as 父 Agent
+    participant AT as AgentTool
+    participant MCP as MCP 服务器
+    participant C as 子 Agent
+    participant T as 子 Agent 工具集
+
+    P-&gt;&gt;AT: Agent(type:&quot;Explore&quot;, prompt:&quot;...&quot;)
+    AT-&gt;&gt;AT: 加载 Agent 定义
+    AT-&gt;&gt;MCP: 检查 MCP 服务器就绪
+    alt MCP 未就绪
+        loop 每 500ms 轮询 (最多 30s)
+            AT-&gt;&gt;MCP: 连接状态?
+        end
+    end
+    AT-&gt;&gt;C: 创建隔离上下文
+    Note over C: messages = []&lt;br/&gt;独立 Token 预算&lt;br/&gt;独立压缩管道
+    AT-&gt;&gt;T: 组装工具集 (定义指定或继承)
+    C-&gt;&gt;C: 独立 queryLoop()
+    loop Agent 执行
+        C-&gt;&gt;T: 工具调用
+        T--&gt;&gt;C: 工具结果
+    end
+    C--&gt;&gt;AT: 返回摘要
+    AT--&gt;&gt;P: 摘要 (不含子 Agent 完整历史)
+</code></pre>
+<blockquote>
+<p><strong>源码批注分析</strong>：AgentTool 源码中有一段关键注释——<em>"Fork children keep the Agent tool in their pool for cache-identical tool defs, so reject fork attempts at call time."</em> 这意味着 Fork 子 Agent 虽然有 Agent 工具在它的工具池中（为了保持与父级 cache-identical 的工具定义），但在运行时会拒绝递归 Fork。主要检查机制是 <code>querySource</code>（不受压缩影响），消息扫描作为备用。这防止了"Agent 无限生成 Agent"的失控场景。</p>
+</blockquote>
+<pre><code>父 Agent 请求: Agent(type: &quot;Explore&quot;, prompt: &quot;...&quot;)
+    │
+    v
+AgentTool.call()
+    │
+    ├─ 1. 加载 Agent 定义（内置或自定义）
+    ├─ 2. 构建隔离的消息数组（messages = []）
+    ├─ 3. 选择工具集（定义中指定或继承）
+    ├─ 4. 设置权限模式（bubble / default / 继承）
+    ├─ 5. 启动独立的查询循环
+    │     └─ 子 Agent 有自己的:
+    │        ├─ 消息历史
+    │        ├─ 工具上下文
+    │        ├─ 压缩管道
+    │        └─ Token 预算
+    ├─ 6. 收集输出
+    └─ 7. 返回摘要给父 Agent
+</code></pre>
+<p><strong>设计哲学</strong>：</p>
+<p>子 Agent 的核心设计是<strong>上下文隔离</strong>。每个子 Agent 从空白消息列表开始，完成后只返回摘要。这防止了：
+- 子任务的噪音污染父级上下文
+- Token 预算被探索性查询耗尽
+- 权限泄露（子 Agent 的工具集可以更受限）</p>
+<h3 id="114-agent">11.4 自定义 Agent</h3>
+<pre><code class="language-markdown">&lt;!-- ~/.claude/agents/code-reviewer.md --&gt;
+---
+name: code-reviewer
+description: Specialized agent for code review
+tools: [Read, Grep, Glob]
+model: claude-sonnet-4-6
+maxTurns: 50
+---
+
+You are a code reviewer. Your job is to:
+1. Read the changed files
+2. Check for bugs, security issues, and style violations
+3. Provide actionable feedback
+
+You are READ-ONLY. You cannot modify any files.
+
+Focus on:
+- Security vulnerabilities (injection, XSS, etc.)
+- Performance issues (N+1 queries, memory leaks)
+- Code quality (naming, SRP, test coverage)
+</code></pre>
+<h3 id="115-coordinator-swarm">11.5 Coordinator / Swarm 系统</h3>
+<pre><code>┌─────────────────────────────────────────────┐
+│            Coordinator System                │
+│                                              │
+│  src/coordinator/                            │
+│  ├─ 多 Agent 编排                            │
+│  ├─ 团队创建/删除                            │
+│  ├─ 任务分配                                 │
+│  └─ 状态同步                                 │
+│                                              │
+│  utils/swarm/                                │
+│  ├─ 协调逻辑                                 │
+│  ├─ 队友工具                                 │
+│  └─ 通信协议                                 │
+│                                              │
+│  工具:                                       │
+│  ├─ TeamCreateTool  — 创建团队 Agent         │
+│  ├─ TeamDeleteTool  — 删除团队 Agent         │
+│  ├─ SendMessageTool — Agent 间消息传递       │
+│  └─ TaskStopTool    — 停止任务               │
+│                                              │
+│  服务:                                       │
+│  ├─ teamMemorySync/ — 多 Agent 记忆同步      │
+│  ├─ AgentSummary/   — Agent 状态摘要         │
+│  └─ swarm/          — Swarm 权限轮询         │
+│                                              │
+└─────────────────────────────────────────────┘
+</code></pre>
+<h3 id="116-agent">11.6 定量分析：子 Agent 的隔离开销与收益</h3>
+<table>
+<thead>
+<tr>
+<th>度量</th>
+<th>无子 Agent（单 Agent）</th>
+<th>有子 Agent（隔离）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>上下文污染风险</strong></td>
+<td>高（所有探索噪音留在历史）</td>
+<td>低（子 Agent 历史丢弃）</td>
+</tr>
+<tr>
+<td><strong>Token 消耗</strong></td>
+<td>O(探索 tokens + 工作 tokens)</td>
+<td>O(摘要 tokens + 工作 tokens)</td>
+</tr>
+<tr>
+<td><strong>探索 10 文件场景</strong></td>
+<td>~50K tokens（全部留在上下文）</td>
+<td>~2K tokens（仅摘要返回）</td>
+</tr>
+<tr>
+<td><strong>Token 节省率</strong></td>
+<td>—</td>
+<td>~96%（上例）</td>
+</tr>
+<tr>
+<td><strong>启动开销</strong></td>
+<td>0</td>
+<td>~5-10K tokens（系统提示复制）</td>
+</tr>
+<tr>
+<td><strong>MCP 就绪等待</strong></td>
+<td>0</td>
+<td>0-30s（首次连接）</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>源码批注</strong>：关于 MCP 就绪等待，源码注释道：<em>"Avoids a race condition where the agent is invoked before MCP servers finish connecting. Early exit if any required server has already failed — no point waiting if the check will fail anyway."</em> 这个 30 秒超时和 500ms 轮询间隔是经验值，平衡了等待成本和连接可靠性。</p>
+<p>关于 Fork Agent 的缓存优化，注释道：<em>"Fork path: child inherits the PARENT's system prompt (not FORK_AGENT's) for CACHE-IDENTICAL API request prefixes."</em> 这意味着 Fork 子 Agent 复用父级的 prompt cache，首次 API 调用不需要重新构建缓存——节省约 30-46K tokens 的 cache creation 成本。</p>
+</blockquote>
+<p><img alt="Sub-Agent Token Savings" src="../images/ch11_subagent_savings.png" />
+<em>图 11-2: 子 Agent 上下文隔离的 Token 节省 — 在"探索 10 文件"场景中，不使用子 Agent 需要 50K tokens（全部留在上下文），使用子 Agent 只需 2K tokens（仅摘要返回），节省 96%。这种节省在长对话中累积效果显著。</em></p>
+<h3 id="117">11.7 任务系统</h3>
+<pre><code class="language-typescript">// src/Task.ts — 任务类型
+type TaskType =
+  | 'local_bash'          // Bash 命令执行
+  | 'local_agent'         // 本地 Agent
+  | 'remote_agent'        // 远程 Agent（CCR）
+  | 'in_process_teammate' // 进程内队友（assistant 模式）
+  | 'local_workflow'      // 工作流脚本
+  | 'monitor_mcp'         // MCP 监控
+  | 'dream';              // Dream 模式任务
+
+interface TaskState {
+  id: string;             // 前缀 + 8 位随机字符（base36）
+  type: TaskType;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'killed';
+  description: string;
+  toolUseId?: string;
+  startTime: number;
+  endTime?: number;
+  totalPausedMs: number;
+  outputFile: string;     // 磁盘上的输出文件
+  outputOffset: number;
+  notified: boolean;
+}
+</code></pre>
+<h3 id="117-worktree">11.7 Worktree 隔离</h3>
+<pre><code>Git Worktree 隔离模式:
+├─ 每个子 Agent 在独立的 git worktree 中工作
+├─ 防止文件冲突（多个 Agent 同时编辑同一文件）
+├─ 工具: EnterWorktreeTool / ExitWorktreeTool
+├─ 完成后:
+│   ├─ 如果有变更: 保留 worktree，返回路径和分支
+│   └─ 如果无变更: 自动清理 worktree
+└─ 与沙盒集成: worktree 路径加入 sandbox allowWrite
+</code></pre>
+<hr />
+<h2 id="skills-plugins">第十二章：Skills &amp; Plugins — 扩展生态</h2>
+<blockquote>
+<p>Tools 是原子操作（读文件、运行命令），Skills 是工作流（"帮我做 Code Review"、"帮我部署到 staging"）。如果说 Tools 是乐高积木，Skills 就是搭好的模型——你可以直接拿来用，也可以拆开重新组合。</p>
+<p>Claude Code 的 Skills 系统是它从"编码工具"进化为"工作流平台"的关键。一个 <code>.md</code> 文件就能定义一个新的工作流——不需要写 TypeScript，不需要重新编译。</p>
+</blockquote>
+<h3 id="121-skills">12.1 Skills 系统</h3>
+<p>Skills 是可重用的工作流定义，类似于"高级宏"。</p>
+<h4 id="skills">内置 Skills</h4>
+<pre><code class="language-typescript">// src/skills/bundled/index.ts
+function initBundledSkills(): void {
+  registerUpdateConfigSkill();   // /update-config
+  registerKeybindingsSkill();    // /keybindings-help
+  registerDebugSkill();          // /debug
+  registerSimplifySkill();       // /simplify
+  registerBatchSkill();          // /batch
+
+  // 特性门控 Skills
+  if (feature('AGENT_TRIGGERS_REMOTE')) {
+    registerScheduleSkill();     // /schedule
+  }
+  if (feature('AGENT_TRIGGERS')) {
+    registerLoopSkill();         // /loop
+  }
+  if (feature('BUILDING_CLAUDE_APPS')) {
+    registerClaudeApiSkill();    // /claude-api
+  }
+}
+</code></pre>
+<h4 id="skills_1">自定义 Skills</h4>
+<pre><code class="language-markdown">&lt;!-- ~/.claude/skills/my-deploy.md --&gt;
+---
+name: deploy
+description: Deploy the application to staging
+args: environment
+---
+
+# Deploy Skill
+
+When invoked with /deploy &lt;environment&gt;:
+
+1. Run the test suite: `npm test`
+2. Build the application: `npm run build`
+3. Deploy to the specified environment:
+   - staging: `aws deploy --env staging`
+   - production: `aws deploy --env production` (requires confirmation)
+4. Verify deployment health check
+5. Report results
+</code></pre>
+<h4 id="skill">Skill 加载</h4>
+<pre><code class="language-typescript">// src/skills/loadSkillsDir.ts
+function loadSkillsDir(dir: string): SkillDefinition[] {
+  // 1. 扫描 ~/.claude/skills/ 目录
+  // 2. 读取每个 .md 文件
+  // 3. 解析 frontmatter（name, description, args）
+  // 4. 创建 SkillDefinition
+  // 5. 注册为可用命令
+}
+</code></pre>
+<h3 id="122-skill">12.2 深度分析：Skill 加载管道</h3>
+<pre><code class="language-typescript">// src/skills/loadSkillsDir.ts — Skill 前置数据解析
+// 25+ 个 frontmatter 字段：
+
+// 身份: name, description, version, when_to_use
+// 执行: model, disable-model-invocation, user-invocable, context('fork')
+// 工具: allowed-tools, disallowed-tools
+// 参数: arguments (数组/逗号分隔), argument-hint
+// Hooks: 通过 HooksSchema() 验证
+// 路径: parseSkillPaths() (与 CLAUDE.md 规则相同格式)
+
+// 两种目录格式：
+// 新格式: /skills/skill-name/SKILL.md (每个 skill 一个目录)
+// 旧格式: /commands/namespace/file.md (扁平 markdown)
+// 旧格式的命名空间: /commands/auth/login/SKILL.md → &quot;auth:login&quot;
+
+// 安全限制：
+// MCP skills (远程/不可信) 禁止执行内联 Shell 命令
+// 本地 skills 可以用 `!command` 语法执行 Shell
+</code></pre>
+<blockquote>
+<p><strong>Skill 的 <code>context: 'fork'</code> 模式</strong>：当 skill 指定 <code>context: 'fork'</code> 时，它在一个<strong>分叉子 Agent</strong> 中执行，享有独立的消息历史和上下文窗口。这意味着 Skill 的执行不会污染主对话的上下文——skill 完成后只返回结果文本。这是 Context Engineering 在 Skill 系统中的体现。</p>
+</blockquote>
+<h3 id="123-skills">12.3 内置 Skills 注册表</h3>
+<pre><code>始终加载 (11 个):
+  updateConfig, keybindings, verify, debug, loremIpsum,
+  skillify, remember, simplify, batch, stuck
+
+特性门控 (7 个):
+  dream         ← KAIROS/KAIROS_DREAM (后台记忆整合)
+  hunter        ← REVIEW_ARTIFACT
+  loop          ← AGENT_TRIGGERS (循环执行)
+  schedule      ← AGENT_TRIGGERS_REMOTE (远程调度)
+  claudeApi     ← BUILDING_CLAUDE_APPS
+  claudeInChrome← 自动检测
+  skillGenerator← RUN_SKILL_GENERATOR
+</code></pre>
+<h3 id="124-plugin">12.4 Plugin 系统</h3>
+<pre><code>src/plugins/          — 插件系统核心
+src/services/plugins/ — 插件加载、版本管理、市场
+src/utils/plugins/    — 插件工具、缓存
+
+Plugin 特性:
+├─ 版本管理（SemVer）
+├─ 缓存系统（减少重复加载）
+├─ Marketplace 集成
+├─ 插件级 Hook 注入
+├─ 独立数据目录（${CLAUDE_PLUGIN_DATA}）
+└─ 配置隔离（${user_config.X}）
+</code></pre>
+<hr />
+<h2 id="harness">第十三章：构建你自己的 Harness — 实战指南</h2>
+<blockquote>
+<p>前面 12 章我们解剖了 Claude Code 这个"参考实现"。现在是你动手的时候了。</p>
+<p>不要试图一次性构建一个 50 万行的 Harness——那是 Anthropic 几十名工程师花了几年的成果。好的 Harness 是<strong>长出来的</strong>，不是设计出来的。从最小可用的配置开始，随着你遇到问题逐步添加约束和能力。</p>
+<p>下面的三个层级不是"选择其一"——而是一条渐进路径。先花 1 小时搭好 Level 1，用几周。然后根据真实痛点升级到 Level 2，再用几个月。最后在组织需要时才考虑 Level 3。</p>
+</blockquote>
+<p><img alt="Harness Maturity Radar" src="../images/ch13_harness_maturity.png" />
+<em>图 13-1: 三级 Harness 成熟度雷达图 — Level 1（绿色）在 Context Management 和 Permission Control 上有基础能力，但缺乏 Multi-Agent、MCP 和企业 MDM。Level 3（紫色）在所有 8 个维度上接近满分。注意 Level 2（黄色）是大多数团队的"甜蜜点"——投入适中但覆盖面广。</em></p>
+<h3 id="131-level-1-harness1-2">13.1 Level 1: 个人 Harness（1-2 小时）</h3>
+<h4 id="1-claudemd">步骤 1: 创建 CLAUDE.md</h4>
+<pre><code class="language-markdown"># CLAUDE.md
+
+## 项目架构
+- src/: 源代码
+- tests/: 测试文件
+- docs/: 文档
+
+## 开发规范
+- 语言: TypeScript strict mode
+- 测试: vitest
+- 格式化: prettier
+- 提交: conventional commits
+
+## 重要约束
+- 不要修改 migrations/ 目录（已部署的迁移不可变）
+- 所有 API 端点必须有认证中间件
+- 不要使用 any 类型
+</code></pre>
+<h4 id="2">步骤 2: 配置基本权限</h4>
+<pre><code class="language-json">// .claude/settings.json
+{
+  &quot;permissions&quot;: {
+    &quot;allow&quot;: [
+      &quot;Read&quot;,
+      &quot;Glob&quot;,
+      &quot;Grep&quot;,
+      &quot;Bash(npm test *)&quot;,
+      &quot;Bash(npm run *)&quot;,
+      &quot;Bash(git status)&quot;,
+      &quot;Bash(git diff *)&quot;,
+      &quot;Bash(git log *)&quot;
+    ],
+    &quot;deny&quot;: [
+      &quot;Bash(sudo *)&quot;,
+      &quot;Bash(rm -rf *)&quot;,
+      &quot;Bash(git push --force *)&quot;,
+      &quot;Bash(git reset --hard *)&quot;
+    ]
+  }
+}
+</code></pre>
+<h4 id="3-hooks">步骤 3: 添加基本 Hooks</h4>
+<pre><code class="language-json">// .claude/settings.json（hooks 部分）
+{
+  &quot;hooks&quot;: {
+    &quot;PreToolUse&quot;: [
+      {
+        &quot;matcher&quot;: &quot;Write&quot;,
+        &quot;hooks&quot;: [
+          {
+            &quot;type&quot;: &quot;command&quot;,
+            &quot;command&quot;: &quot;echo 'Writing file: '$(echo $HOOK_INPUT | jq -r '.tool_input.file_path')&quot;,
+            &quot;if&quot;: &quot;Write(*.ts)&quot;
+          }
+        ]
+      }
+    ],
+    &quot;PostToolUse&quot;: [
+      {
+        &quot;matcher&quot;: &quot;Bash&quot;,
+        &quot;hooks&quot;: [
+          {
+            &quot;type&quot;: &quot;command&quot;,
+            &quot;command&quot;: &quot;npm run lint -- --quiet 2&gt;/dev/null || true&quot;,
+            &quot;if&quot;: &quot;Bash(npm *)&quot;,
+            &quot;async&quot;: true
+          }
+        ]
+      }
+    ]
+  }
+}
+</code></pre>
+<h3 id="132-level-2-harness1-2">13.2 Level 2: 团队 Harness（1-2 天）</h3>
+<h4 id="1">步骤 1: 共享设置</h4>
+<pre><code class="language-json">// .claude/settings.json（提交到 git）
+{
+  &quot;permissions&quot;: {
+    &quot;allow&quot;: [
+      &quot;Bash(npm test *)&quot;,
+      &quot;Bash(npm run lint *)&quot;,
+      &quot;Bash(git *)&quot;
+    ],
+    &quot;deny&quot;: [
+      &quot;Bash(sudo *)&quot;,
+      &quot;Bash(rm -rf /)&quot;,
+      &quot;Bash(npm publish *)&quot;,
+      &quot;Write(*.env*)&quot;,
+      &quot;Write(*.key)&quot;,
+      &quot;Write(*.pem)&quot;
+    ],
+    &quot;defaultMode&quot;: &quot;default&quot;
+  },
+  &quot;sandbox&quot;: {
+    &quot;enabled&quot;: true,
+    &quot;fsWrite&quot;: {
+      &quot;deny&quot;: [&quot;.env&quot;, &quot;.env.*&quot;, &quot;*.key&quot;, &quot;*.pem&quot;, &quot;secrets/&quot;]
+    },
+    &quot;network&quot;: {
+      &quot;allowedDomains&quot;: [
+        &quot;*.github.com&quot;,
+        &quot;registry.npmjs.org&quot;,
+        &quot;api.anthropic.com&quot;
+      ]
+    }
+  }
+}
+</code></pre>
+<h4 id="2-agents">步骤 2: 定义团队 Agents</h4>
+<pre><code class="language-markdown">&lt;!-- .claude/agents/architect.md --&gt;
+---
+name: architect
+description: Reviews architecture decisions and suggests improvements
+tools: [Read, Grep, Glob]
+model: claude-opus-4-6
+maxTurns: 30
+---
+
+You are an architecture reviewer. Analyze the codebase and provide:
+1. Dependency analysis
+2. Coupling/cohesion assessment
+3. SOLID principle compliance
+4. Suggestions for improvement
+
+Focus on high-level design, not line-by-line code review.
+</code></pre>
+<pre><code class="language-markdown">&lt;!-- .claude/agents/test-writer.md --&gt;
+---
+name: test-writer
+description: Writes comprehensive tests for existing code
+tools: [Read, Write, Edit, Bash, Glob, Grep]
+model: claude-sonnet-4-6
+maxTurns: 100
+---
+
+You are a test engineer. For any given code:
+1. Analyze the code and identify test cases
+2. Write comprehensive tests (unit + integration)
+3. Run the tests to verify they pass
+4. Ensure &gt;80% coverage for touched files
+</code></pre>
+<h4 id="3-mcp">步骤 3: 配置 MCP 服务器</h4>
+<pre><code class="language-json">// .claude/mcp.json
+{
+  &quot;mcpServers&quot;: {
+    &quot;github&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;-y&quot;, &quot;@modelcontextprotocol/server-github&quot;],
+      &quot;env&quot;: { &quot;GITHUB_TOKEN&quot;: &quot;${GITHUB_TOKEN}&quot; }
+    },
+    &quot;postgres&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;-y&quot;, &quot;@modelcontextprotocol/server-postgres&quot;],
+      &quot;env&quot;: { &quot;DATABASE_URL&quot;: &quot;${DATABASE_URL}&quot; }
+    }
+  }
+}
+</code></pre>
+<h4 id="4-skills">步骤 4: 创建团队 Skills</h4>
+<pre><code class="language-markdown">&lt;!-- .claude/skills/review-pr.md --&gt;
+---
+name: review-pr
+description: Comprehensive PR review workflow
+args: pr_number
+---
+
+# PR Review Workflow
+
+1. Fetch the PR diff: `gh pr diff $ARGUMENTS`
+2. Read all changed files
+3. For each file:
+   - Check for security issues
+   - Check for performance concerns
+   - Check for test coverage
+   - Check for style consistency
+4. Generate a structured review comment
+5. Post the review: `gh pr review $ARGUMENTS --comment --body &quot;...&quot;`
+</code></pre>
+<h3 id="133-level-3-harness1-2">13.3 Level 3: 组织级 Harness（1-2 周）</h3>
+<h4 id="1-mdm">步骤 1: 企业 MDM 设置</h4>
+<pre><code class="language-json">// /managed/managed-settings.json
+{
+  &quot;permissions&quot;: {
+    &quot;deny&quot;: [
+      &quot;Bash(sudo *)&quot;,
+      &quot;Bash(curl * | bash)&quot;,
+      &quot;Bash(wget * | bash)&quot;,
+      &quot;Write(*.env*)&quot;,
+      &quot;Write(*.pem)&quot;,
+      &quot;Write(*.key)&quot;
+    ],
+    &quot;disableBypassPermissionsMode&quot;: &quot;disable&quot;
+  },
+  &quot;sandbox&quot;: {
+    &quot;enabled&quot;: true,
+    &quot;lockedByPolicy&quot;: true,
+    &quot;network&quot;: {
+      &quot;deniedDomains&quot;: [&quot;*.malware.com&quot;, &quot;*.phishing.net&quot;]
+    }
+  },
+  &quot;deniedMcpServers&quot;: [&quot;*-untrusted&quot;, &quot;*-experimental&quot;]
+}
+</code></pre>
+<h4 id="2-hook">步骤 2: 审计 Hook</h4>
+<pre><code class="language-json">// /managed/managed-settings.d/audit.json
+{
+  &quot;hooks&quot;: {
+    &quot;PostToolUse&quot;: [
+      {
+        &quot;hooks&quot;: [
+          {
+            &quot;type&quot;: &quot;http&quot;,
+            &quot;url&quot;: &quot;https://audit.company.com/api/agent-actions&quot;,
+            &quot;headers&quot;: {
+              &quot;Authorization&quot;: &quot;Bearer $AUDIT_API_KEY&quot;,
+              &quot;Content-Type&quot;: &quot;application/json&quot;
+            },
+            &quot;allowedEnvVars&quot;: [&quot;AUDIT_API_KEY&quot;],
+            &quot;async&quot;: true
+          }
+        ]
+      }
+    ],
+    &quot;SessionStart&quot;: [
+      {
+        &quot;hooks&quot;: [
+          {
+            &quot;type&quot;: &quot;command&quot;,
+            &quot;command&quot;: &quot;echo '{\&quot;session_started\&quot;: true}' | curl -s -X POST -d @- https://audit.company.com/api/sessions&quot;,
+            &quot;async&quot;: true
+          }
+        ]
+      }
+    ]
+  }
+}
+</code></pre>
+<h4 id="3-planworkreview">步骤 3: 实现 Plan→Work→Review 循环</h4>
+<p>参考 claude-code-harness 项目的 13 条防护规则：</p>
+<pre><code>R01: 阻止 sudo 命令
+R02: 禁止写入 .git/, .env, SSH 密钥
+R03: 禁止 Shell 写入受保护文件
+R04: 写入项目根目录外需要确认
+R05: rm -rf 需要确认
+R06: 禁止 git push --force
+R07-R09: 模式特定防护（work/codex/breezing）
+R10: 禁止 --no-verify, --no-gpg-sign
+R11: 禁止 git reset --hard main/master
+R12: 警告直接推送到 main/master
+R13: 警告编辑受保护文件
+</code></pre>
+<p>实现为 PreToolUse Hook：</p>
+<pre><code class="language-json">{
+  &quot;hooks&quot;: {
+    &quot;PreToolUse&quot;: [
+      {
+        &quot;matcher&quot;: &quot;Bash&quot;,
+        &quot;hooks&quot;: [
+          {
+            &quot;type&quot;: &quot;command&quot;,
+            &quot;command&quot;: &quot;node guard-rules.js&quot;,
+            &quot;timeout&quot;: 5
+          }
+        ]
+      }
+    ]
+  }
+}
+</code></pre>
+<hr />
+<h2 id="_10">第十四章：高级模式与设计哲学</h2>
+<blockquote>
+<p>这是最后一章，也是最重要的一章。前面我们学的是"Claude Code 怎么做的"。这一章我们要理解"为什么这么做"。</p>
+<p>工具和框架会过时，但设计哲学不会。如果你只记住本书的一个章节，应该是这一章——这些原则适用于任何 Agent Harness，不限于 Claude Code。</p>
+</blockquote>
+<h3 id="141-claude-code">14.1 Claude Code 的十大设计哲学</h3>
+<h4 id="1-async-generator">1. Async Generator 流式架构</h4>
+<pre><code>不是: function query() → Promise&lt;FinalResult&gt;
+而是: async function* query() → AsyncGenerator&lt;StreamEvent&gt;
+
+为什么: 客户端可以在模型思考时就开始渲染
+         用户可以随时中断
+         进度对用户可见
+</code></pre>
+<h4 id="2-continue">2. 通过 Continue 站点实现状态机</h4>
+<pre><code>不是: 显式状态枚举 + switch/case
+而是: while(true) + 7 个 continue 站点
+
+为什么: 恢复路径是自然的（continue = 重试）
+         状态转换是局部的（只需更新 State 对象）
+         新恢复路径可以添加而不重构
+</code></pre>
+<h4 id="3">3. 编译时特性门控</h4>
+<pre><code>不是: if (config.feature_x) { ... }
+而是: if (feature('FEATURE_X')) { ... }  // bun:bundle 编译时求值
+
+为什么: 外部发行版不包含任何内部特性代码（连字符串都没有）
+         不存在运行时分支预测开销
+         代码大小最小化
+</code></pre>
+<h4 id="4">4. 缓存前缀稳定性</h4>
+<pre><code>不是: 将内置工具和 MCP 工具混合排序
+而是: 内置工具排序后作为稳定前缀，MCP 工具排序后追加
+
+为什么: Anthropic API 的 prompt cache 基于前缀匹配
+         MCP 工具变化时，内置工具前缀不变 → 缓存不失效
+         大幅降低 API 成本
+</code></pre>
+<h4 id="5">5. 纵深防御</h4>
+<pre><code>Layer 1: CLAUDE.md（指导性约束）
+Layer 2: Permission Rules（声明性约束）
+Layer 3: Hooks（可编程约束）
+Layer 4: YOLO Classifier（AI 约束）
+Layer 5: Sandbox（系统级约束）
+Layer 6: Hardcoded Denials（不可覆盖约束）
+
+为什么: 每一层都可能被绕过
+         多层叠加使绕过概率指数下降
+         最内层（硬编码）无法通过配置禁用
+</code></pre>
+<h4 id="6">6. 数据驱动的可扩展性</h4>
+<pre><code>不是: 修改源码添加新功能
+而是: settings.json + agents/*.md + skills/*.md + hooks
+
+为什么: 非工程师也能定制 Harness
+         定制与核心代码解耦
+         升级时不丢失定制
+</code></pre>
+<h4 id="7">7. 上下文即稀缺资源</h4>
+<pre><code>设计: 工具延迟加载、记忆按需附加、四级压缩管道
+       ToolSearch 发现机制、Microcompact 老化策略
+
+为什么: 上下文窗口有限（即使 1M token）
+         无关信息降低模型性能
+         成本与 token 使用量成正比
+</code></pre>
+<h4 id="8">8. 层级化配置覆盖</h4>
+<pre><code>7 级设置: CLI &gt; Flag &gt; Policy &gt; Managed &gt; Local &gt; Project &gt; User
+
+为什么: 不同层级有不同的信任级别
+         企业管理员可以强制策略
+         项目维护者可以设定合理默认
+         用户可以个人微调
+</code></pre>
+<h4 id="9-agent">9. 隔离的子 Agent 上下文</h4>
+<pre><code>设计: 子 Agent 从空白消息列表开始
+       完成后只返回摘要
+       父级上下文不被污染
+
+为什么: 探索性任务可能产生大量噪音
+         子 Agent 的失败不应影响父级
+         Token 预算隔离
+</code></pre>
+<h4 id="10">10. 可逆性优先</h4>
+<pre><code>设计: 文件编辑通过 Edit（替换字符串），不是 Write（覆盖）
+       每个工具调用有 undo 能力
+       自动快照（文件历史）
+
+为什么: Agent 会犯错
+         用户需要轻松回滚
+         &quot;先行动后审查&quot;比&quot;先审查后行动&quot;更高效
+</code></pre>
+<h3 id="142-entropy-management">14.2 Entropy Management 模式</h3>
+<pre><code>┌──────────────────────────────────────────────┐
+│         Entropy Management Patterns           │
+│                                               │
+│  1. 定期清理 Agent                            │
+│     /loop 1h &quot;检查死代码、未使用导入、        │
+│                过期 TODO、不一致的命名&quot;         │
+│                                               │
+│  2. 文档验证 Agent                            │
+│     SessionEnd Hook → 检查 CLAUDE.md          │
+│     是否与代码实际状态一致                     │
+│                                               │
+│  3. 依赖审计 Agent                            │
+│     /schedule &quot;每周一 0:00&quot; →                  │
+│     &quot;检查过期依赖、安全漏洞、许可证合规&quot;       │
+│                                               │
+│  4. 测试覆盖率守卫                            │
+│     PostToolUse Hook（Write *.ts）→            │
+│     &quot;运行覆盖率检查，如果下降则警告&quot;           │
+│                                               │
+└──────────────────────────────────────────────┘
+</code></pre>
+<h3 id="143-bridge-system-ide">14.3 Bridge System — IDE 集成</h3>
+<pre><code>src/bridge/
+├── bridgeMain.ts             — 主循环
+├── bridgeMessaging.ts        — 消息协议
+├── bridgePermissionCallbacks.ts — 权限处理
+├── replBridge.ts             — REPL 桥接
+├── jwtUtils.ts               — JWT 认证
+└── sessionRunner.ts          — 会话执行
+
+支持:
+├── VS Code 扩展
+├── JetBrains 扩展
+├── 双向通信（IDE ↔ Claude Code）
+├── 权限同步
+└── 会话状态同步
+</code></pre>
+<h3 id="144-plan-mode-v2">14.4 Plan Mode V2</h3>
+<pre><code>5 阶段工作流:
+
+Phase 1: Interview（访谈）
+├─ 收集需求
+├─ 理解上下文
+└─ 最多启动 3 个 Explore Agent（并行）
+
+Phase 2: Design（设计）
+├─ 启动 Plan Agent
+├─ 生成实现方案
+└─ 可启动多个以探索不同方向
+
+Phase 3: Review（审查）
+├─ 读取关键文件验证方案
+├─ 确保与用户意图一致
+└─ 通过 AskUserQuestion 澄清
+
+Phase 4: Final Plan（最终计划）
+├─ 写入 ~/.claude/plans/&lt;name&gt;.md
+├─ 包含上下文、步骤、文件路径
+└─ 验证部分描述如何测试
+
+Phase 5: Exit Plan Mode
+├─ 调用 ExitPlanMode
+├─ 等待用户批准
+└─ 批准后开始执行
+</code></pre>
+<h3 id="145-cron">14.5 远程触发与 Cron 调度</h3>
+<pre><code class="language-typescript">// 特性门控: AGENT_TRIGGERS + AGENT_TRIGGERS_REMOTE
+
+// ScheduleCronTool — 创建定时 Agent
+{
+  schedule: &quot;0 9 * * MON&quot;,   // 每周一早 9 点
+  prompt: &quot;Review open PRs and post summary to Slack&quot;,
+  model: &quot;claude-sonnet-4-6&quot;,
+}
+
+// RemoteTriggerTool — 远程触发
+{
+  trigger: &quot;deploy-check&quot;,
+  prompt: &quot;Verify deployment health&quot;,
+}
+</code></pre>
+<h3 id="146-voice-integration">14.6 Voice Integration</h3>
+<pre><code>src/voice/                   — 语音输入
+src/services/voice.ts        — 语音/STT 集成
+src/services/voiceStreamSTT.ts — 流式语音转文字
+
+特性门控: VOICE_MODE
+支持:
+├── 语音输入转文字
+├── 流式处理（边说边识别）
+└── 集成到主查询循环
+</code></pre>
+<h3 id="147-harness">14.7 "可拆卸 Harness" 原则</h3>
+<pre><code>核心理念: Harness 应该能随模型能力提升而简化
+
+示例:
+├── 今天: 需要 13 条防护规则阻止危险操作
+│   └── 未来更好的模型可能不需要其中一半
+│
+├── 今天: 四级压缩管道应对有限上下文
+│   └── 未来更大的上下文窗口可能只需要一级
+│
+├── 今天: YOLO 分类器需要两阶段检查
+│   └── 未来主模型可能自带更好的安全意识
+│
+└── 设计启示:
+    ├── 每个 Harness 组件应该可以独立禁用
+    ├── 设置覆盖优于硬编码
+    ├── 随着模型改进，简化而非堆叠
+    └── &quot;最好的 Harness 是你最终不需要的那个&quot;
+</code></pre>
+<hr />
+<h2 id="ctoolusecontext">附录 C：ToolUseContext 完整类型定义</h2>
+<p><code>ToolUseContext</code> 是贯穿整个执行管道的"请求上下文"——理解它就理解了 Harness 的信息流：</p>
+<pre><code class="language-typescript">// src/Tool.ts — 真实代码（精简注释版）
+export type ToolUseContext = {
+  // ===== 配置（只读）=====
+  options: {
+    commands: Command[]           // 可用的 Slash 命令
+    debug: boolean                // 调试模式
+    mainLoopModel: string         // 主循环使用的模型
+    tools: Tools                  // 可用工具列表
+    verbose: boolean              // 详细输出
+    thinkingConfig: ThinkingConfig// 思考模式配置
+    mcpClients: MCPServerConnection[]  // MCP 服务器连接
+    mcpResources: Record&lt;string, ServerResource[]&gt;  // MCP 资源
+    isNonInteractiveSession: boolean   // 非交互式会话
+    agentDefinitions: AgentDefinitionsResult  // Agent 定义
+    maxBudgetUsd?: number         // 最大预算（美元）
+    customSystemPrompt?: string   // 自定义系统提示
+    appendSystemPrompt?: string   // 追加系统提示
+    querySource?: QuerySource     // 查询来源标识
+    refreshTools?: () =&gt; Tools    // 工具列表刷新函数
+  }
+
+  // ===== 控制 =====
+  abortController: AbortController  // 取消信号
+  messages: Message[]               // 当前消息历史
+
+  // ===== 状态读写 =====
+  readFileState: FileStateCache     // 文件状态缓存
+  getAppState(): AppState           // 获取应用状态
+  setAppState(f: (prev) =&gt; AppState): void  // 更新应用状态
+
+  // ===== 回调 =====
+  setToolJSX?: SetToolJSXFn         // 设置工具 UI
+  addNotification?: (n: Notification) =&gt; void  // 添加通知
+  sendOSNotification?: (opts) =&gt; void          // 发送系统通知
+  setInProgressToolUseIDs: (f) =&gt; void         // 跟踪进行中的工具
+  setResponseLength: (f) =&gt; void               // 跟踪响应长度
+  updateFileHistoryState: (updater) =&gt; void    // 更新文件历史
+  updateAttributionState: (updater) =&gt; void    // 更新归因状态
+
+  // ===== Agent 相关 =====
+  agentId?: AgentId                 // Agent 标识
+  agentType?: string                // Agent 类型
+  requireCanUseTool?: boolean       // 是否需要权限检查
+
+  // ===== 动态 Skill/Memory =====
+  nestedMemoryAttachmentTriggers?: Set&lt;string&gt;  // 嵌套记忆触发器
+  loadedNestedMemoryPaths?: Set&lt;string&gt;         // 已加载的记忆路径
+  dynamicSkillDirTriggers?: Set&lt;string&gt;         // 动态 Skill 目录触发器
+  discoveredSkillNames?: Set&lt;string&gt;            // 已发现的 Skill 名称
+
+  // ===== 权限 =====
+  localDenialTracking?: DenialTrackingState     // 本地拒绝跟踪
+  toolDecisions?: Map&lt;string, {...}&gt;            // 工具决策记录
+  contentReplacementState?: ContentReplacementState  // 内容替换状态
+
+  // ===== 高级 =====
+  requestPrompt?: (sourceName, summary?) =&gt;     // Hook prompt 请求
+    (request: PromptRequest) =&gt; Promise&lt;PromptResponse&gt;
+  handleElicitation?: (serverName, params, signal) =&gt;  // MCP elicitation
+    Promise&lt;ElicitResult&gt;
+  onCompactProgress?: (event) =&gt; void           // 压缩进度回调
+  criticalSystemReminder_EXPERIMENTAL?: string  // 关键系统提醒
+}
+</code></pre>
+<p><strong>设计分析</strong>：ToolUseContext 是一个<strong>大型上下文对象</strong>，类似于 Web 框架中的 Request 对象。它携带了工具执行所需的一切——配置、状态、回调、权限。虽然有 50+ 个字段看起来很复杂，但这种设计避免了：
+1. 全局状态（每个查询有自己的上下文）
+2. 参数爆炸（不需要逐个传递）
+3. 紧耦合（工具只使用自己需要的字段）</p>
+<hr />
+<h2 id="d13">附录 D：13 条防护规则参考模型</h2>
+<p><a href="https://github.com/Chachamaru127/claude-code-harness">claude-code-harness</a> 项目定义了 13 条声明性防护规则，作为 PreToolUse Hook 实现：</p>
+<pre><code class="language-typescript">// 来自 claude-code-harness/core/src/guardrails/
+
+// R01: 阻止 sudo — 永远不允许提权
+{ rule: 'R01', test: (input) =&gt; /^sudo\s/.test(input.command),
+  action: 'deny', reason: 'sudo commands are not allowed' }
+
+// R02: 禁止写入敏感路径
+{ rule: 'R02', test: (input) =&gt; SENSITIVE_PATHS.some(p =&gt; input.file_path?.startsWith(p)),
+  action: 'deny', paths: ['.git/', '.env', '~/.ssh/'] }
+
+// R03: 禁止 Shell 写入受保护文件
+{ rule: 'R03', test: (input) =&gt; isShellWriteToProtectedFile(input),
+  action: 'deny' }
+
+// R04: 项目根目录外写入需确认
+{ rule: 'R04', test: (input) =&gt; !isWithinProjectRoot(input.file_path),
+  action: 'ask', reason: 'Writing outside project root' }
+
+// R05: rm -rf 需确认
+{ rule: 'R05', test: (input) =&gt; /rm\s+(-rf|-r\s+-f|-f\s+-r)/.test(input.command),
+  action: 'ask', reason: 'Recursive delete detected' }
+
+// R06: 禁止 force push
+{ rule: 'R06', test: (input) =&gt; /git\s+push\s+.*--force/.test(input.command),
+  action: 'deny', reason: 'Force push is not allowed' }
+
+// R07-R09: 模式特定防护
+{ rule: 'R07', mode: 'work', ... }   // Work 模式限制
+{ rule: 'R08', mode: 'codex', ... }  // Codex 集成限制
+{ rule: 'R09', mode: 'breezing', ... } // Breezing 模式限制
+
+// R10: 禁止跳过安全钩子
+{ rule: 'R10', test: (input) =&gt; /--no-verify|--no-gpg-sign/.test(input.command),
+  action: 'deny', reason: 'Skipping safety hooks is not allowed' }
+
+// R11: 禁止 hard reset 到 main
+{ rule: 'R11', test: (input) =&gt; /git\s+reset\s+--hard\s+(main|master)/.test(input.command),
+  action: 'deny' }
+
+// R12: 警告直接推送到 main
+{ rule: 'R12', test: (input) =&gt; isDirectPushToMain(input),
+  action: 'warn' }
+
+// R13: 警告编辑受保护文件
+{ rule: 'R13', test: (input) =&gt; PROTECTED_FILES.includes(input.file_path),
+  action: 'warn', files: ['package-lock.json', 'yarn.lock', 'Cargo.lock'] }
+</code></pre>
+<p><strong>这些规则完全可以用 Claude Code 的原生 Hook 系统实现</strong>：</p>
+<pre><code class="language-json">{
+  &quot;hooks&quot;: {
+    &quot;PreToolUse&quot;: [
+      {
+        &quot;matcher&quot;: &quot;Bash&quot;,
+        &quot;hooks&quot;: [{
+          &quot;type&quot;: &quot;command&quot;,
+          &quot;command&quot;: &quot;node guard-rules.js&quot;,
+          &quot;if&quot;: &quot;Bash(sudo *)&quot;
+        }]
+      }
+    ]
+  }
+}
+</code></pre>
+<hr />
+<h2 id="mini-harnesshands-on">第十五章：从零构建一个 Mini Harness（Hands-on 实战）</h2>
+<blockquote>
+<p>前面 14 章我们解剖了 Claude Code 的 512K 行源码。现在是动手的时候——我们将用 Python 从零构建一个 <strong>200 行的 Mini Harness</strong>，实现 Claude Code 的核心设计模式。</p>
+</blockquote>
+<h3 id="151-30-harness">15.1 目标：30 分钟内运行的最小 Harness</h3>
+<pre><code class="language-python">#!/usr/bin/env python3
+&quot;&quot;&quot;mini_harness.py — 一个 200 行的 Claude Code 式 Agent Harness&quot;&quot;&quot;
+import anthropic, json, os, subprocess, re
+from pathlib import Path
+
+client = anthropic.Anthropic()
+MODEL = &quot;claude-sonnet-4-6&quot;
+
+# ====================================================
+# Layer 1: Tool System (对应 Claude Code 的 src/Tool.ts)
+# ====================================================
+TOOLS = [
+    {
+        &quot;name&quot;: &quot;bash&quot;,
+        &quot;description&quot;: &quot;Run a shell command. Returns stdout and exit code.&quot;,
+        &quot;input_schema&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;properties&quot;: {
+                &quot;command&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;description&quot;: &quot;The command to run&quot;}
+            },
+            &quot;required&quot;: [&quot;command&quot;]
+        }
+    },
+    {
+        &quot;name&quot;: &quot;read_file&quot;,
+        &quot;description&quot;: &quot;Read a file and return its contents.&quot;,
+        &quot;input_schema&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;properties&quot;: {
+                &quot;path&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;description&quot;: &quot;File path to read&quot;}
+            },
+            &quot;required&quot;: [&quot;path&quot;]
+        }
+    },
+    {
+        &quot;name&quot;: &quot;write_file&quot;,
+        &quot;description&quot;: &quot;Write content to a file.&quot;,
+        &quot;input_schema&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;properties&quot;: {
+                &quot;path&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;description&quot;: &quot;File path to write&quot;},
+                &quot;content&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;description&quot;: &quot;Content to write&quot;}
+            },
+            &quot;required&quot;: [&quot;path&quot;, &quot;content&quot;]
+        }
+    }
+]
+
+# ====================================================
+# Layer 2: Permission Rules (对应 Claude Code 的 permissions.ts)
+# ====================================================
+DENY_PATTERNS = [
+    r&quot;^sudo\s&quot;,           # R01: 禁止 sudo
+    r&quot;rm\s+-rf\s+/&quot;,      # R05: 禁止 rm -rf /
+    r&quot;git\s+push\s+--force&quot;, # R06: 禁止 force push
+]
+
+ALLOW_TOOLS = {&quot;read_file&quot;}  # 只读工具始终允许
+
+def check_permission(tool_name: str, tool_input: dict) -&gt; tuple[bool, str]:
+    &quot;&quot;&quot;Layer 2: 权限检查 (简化版 hasPermissionsToUseTool)&quot;&quot;&quot;
+    if tool_name in ALLOW_TOOLS:
+        return True, &quot;allowed by rule&quot;
+
+    if tool_name == &quot;bash&quot;:
+        cmd = tool_input.get(&quot;command&quot;, &quot;&quot;)
+        for pattern in DENY_PATTERNS:
+            if re.search(pattern, cmd):
+                return False, f&quot;denied: matches {pattern}&quot;
+
+    # 默认：询问用户（对应 Claude Code 的 'ask' 模式）
+    answer = input(f&quot;  Allow {tool_name}({json.dumps(tool_input)[:80]})? [y/n] &quot;)
+    return answer.lower() == 'y', &quot;user decision&quot;
+
+# ====================================================
+# Layer 3: Tool Execution (对应 Claude Code 的 toolExecution.ts)
+# ====================================================
+def execute_tool(tool_name: str, tool_input: dict) -&gt; str:
+    &quot;&quot;&quot;Layer 3: 执行工具&quot;&quot;&quot;
+    if tool_name == &quot;bash&quot;:
+        result = subprocess.run(
+            tool_input[&quot;command&quot;], shell=True,
+            capture_output=True, text=True, timeout=30
+        )
+        return f&quot;exit_code={result.returncode}\n{result.stdout}{result.stderr}&quot;
+    elif tool_name == &quot;read_file&quot;:
+        return Path(tool_input[&quot;path&quot;]).read_text()
+    elif tool_name == &quot;write_file&quot;:
+        Path(tool_input[&quot;path&quot;]).write_text(tool_input[&quot;content&quot;])
+        return f&quot;Written to {tool_input['path']}&quot;
+    return &quot;Unknown tool&quot;
+
+# ====================================================
+# Layer 4: Context Engineering (对应 Claude Code 的 CLAUDE.md)
+# ====================================================
+def load_context() -&gt; str:
+    &quot;&quot;&quot;Layer 4: 加载 CLAUDE.md 上下文&quot;&quot;&quot;
+    claude_md = Path(&quot;CLAUDE.md&quot;)
+    if claude_md.exists():
+        return f&quot;\n&lt;project_context&gt;\n{claude_md.read_text()}\n&lt;/project_context&gt;\n&quot;
+    return &quot;&quot;
+
+SYSTEM_PROMPT = f&quot;&quot;&quot;You are a coding assistant. Use tools to help the user.
+Be concise. Don't explain what you're about to do — just do it.
+{load_context()}&quot;&quot;&quot;
+
+# ====================================================
+# Layer 5: Agent Loop (对应 Claude Code 的 query.ts)
+# ====================================================
+def agent_loop():
+    &quot;&quot;&quot;Layer 5: 核心 Agent 循环&quot;&quot;&quot;
+    messages = []
+    print(&quot;Mini Harness (type 'exit' to quit)&quot;)
+
+    while True:
+        user_input = input(&quot;\n&gt; &quot;)
+        if user_input.lower() == 'exit':
+            break
+
+        messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: user_input})
+
+        # 内循环：工具调用链（对应 queryLoop 的 while(true)）
+        while True:
+            response = client.messages.create(
+                model=MODEL, max_tokens=4096,
+                system=SYSTEM_PROMPT,
+                messages=messages, tools=TOOLS,
+            )
+
+            # 收集助手消息
+            messages.append({&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: response.content})
+
+            # 无工具调用 → 打印文本并退出内循环
+            if response.stop_reason != &quot;tool_use&quot;:
+                for block in response.content:
+                    if hasattr(block, 'text'):
+                        print(f&quot;\n{block.text}&quot;)
+                break
+
+            # 执行工具调用
+            tool_results = []
+            for block in response.content:
+                if block.type != &quot;tool_use&quot;:
+                    continue
+
+                # 权限检查（Layer 2）
+                allowed, reason = check_permission(block.name, block.input)
+                if not allowed:
+                    tool_results.append({
+                        &quot;type&quot;: &quot;tool_result&quot;,
+                        &quot;tool_use_id&quot;: block.id,
+                        &quot;content&quot;: f&quot;Permission denied: {reason}&quot;,
+                        &quot;is_error&quot;: True,
+                    })
+                    print(f&quot;  ✗ {block.name} denied: {reason}&quot;)
+                    continue
+
+                # 执行工具（Layer 3）
+                try:
+                    result = execute_tool(block.name, block.input)
+                    tool_results.append({
+                        &quot;type&quot;: &quot;tool_result&quot;,
+                        &quot;tool_use_id&quot;: block.id,
+                        &quot;content&quot;: result,
+                    })
+                    print(f&quot;  ✓ {block.name} completed&quot;)
+                except Exception as e:
+                    tool_results.append({
+                        &quot;type&quot;: &quot;tool_result&quot;,
+                        &quot;tool_use_id&quot;: block.id,
+                        &quot;content&quot;: f&quot;Error: {e}&quot;,
+                        &quot;is_error&quot;: True,
+                    })
+
+            messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: tool_results})
+
+if __name__ == &quot;__main__&quot;:
+    agent_loop()
+</code></pre>
+<h3 id="152-mini-harness">15.2 运行你的 Mini Harness</h3>
+<pre><code class="language-bash"># 1. 设置 API key
+export ANTHROPIC_API_KEY=&quot;sk-ant-...&quot;
+
+# 2. 创建一个 CLAUDE.md
+echo &quot;# Project Rules
+- Use TypeScript for all new files
+- Run tests after making changes: npm test&quot; &gt; CLAUDE.md
+
+# 3. 运行
+python mini_harness.py
+
+# 4. 测试权限系统
+&gt; run sudo rm -rf /
+  ✗ bash denied: matches ^sudo\s
+
+&gt; read the file package.json
+  ✓ read_file completed  (自动允许，无需确认)
+
+&gt; run npm test
+  Allow bash({&quot;command&quot;: &quot;npm test&quot;})? [y/n] y
+  ✓ bash completed
+</code></pre>
+<h3 id="153-claude-code">15.3 对照 Claude Code 的设计模式</h3>
+<table>
+<thead>
+<tr>
+<th>Mini Harness (200 行)</th>
+<th>Claude Code (512K 行)</th>
+<th>差距在哪</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3 个工具</td>
+<td>43+ 工具</td>
+<td>工具数量</td>
+</tr>
+<tr>
+<td>正则匹配权限</td>
+<td>7 级层级 + AI 分类器</td>
+<td>权限精度</td>
+</tr>
+<tr>
+<td>用户 y/n 确认</td>
+<td>5 种模式 + Hook 系统</td>
+<td>灵活性</td>
+</tr>
+<tr>
+<td>无压缩</td>
+<td>四级压缩管道</td>
+<td>长对话支持</td>
+</tr>
+<tr>
+<td>无子 Agent</td>
+<td>5 种 Agent 类型</td>
+<td>复杂任务分解</td>
+</tr>
+<tr>
+<td>CLAUDE.md 静态加载</td>
+<td>记忆系统 + 动态注入</td>
+<td>上下文管理</td>
+</tr>
+<tr>
+<td>无重试</td>
+<td>7 个 continue 站点</td>
+<td>鲁棒性</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>练习</strong>：尝试给 Mini Harness 添加以下功能（每个 ~20 行代码）：
+1. <strong>简单的 Hook 系统</strong>：在工具执行前后运行 shell 脚本
+2. <strong>Token 计数器</strong>：追踪每次 API 调用的 token 消耗和累计成本
+3. <strong>会话保存/恢复</strong>：将 messages 序列化到 JSON 文件，支持 <code>--resume</code>
+4. <strong>子 Agent</strong>：添加一个 <code>agent</code> 工具，分叉一个新的 agent_loop() 带独立消息</p>
+</blockquote>
+<hr />
+<h2 id="_11">第十六章：竞品对比分析</h2>
+<blockquote>
+<p>Claude Code 不是唯一的 AI 编码 Agent。理解竞品的 Harness 设计有助于辨别哪些是通用模式，哪些是 Claude Code 独有的创新。</p>
+</blockquote>
+<h3 id="161-agent-harness">16.1 三大 Agent 的 Harness 架构对比</h3>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>Claude Code</th>
+<th>Cursor</th>
+<th>GitHub Copilot</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>运行环境</strong></td>
+<td>终端 CLI</td>
+<td>VS Code fork</td>
+<td>VS Code 扩展</td>
+</tr>
+<tr>
+<td><strong>交互模式</strong></td>
+<td>自主 Agent</td>
+<td>协作编辑器</td>
+<td>反应式自动补全 + Agent Mode</td>
+</tr>
+<tr>
+<td><strong>Agent Loop</strong></td>
+<td>while(true) + 7 continue sites</td>
+<td>不公开</td>
+<td>不公开</td>
+</tr>
+<tr>
+<td><strong>工具系统</strong></td>
+<td>43+ 内置 + MCP 扩展</td>
+<td>内置编辑 + 终端</td>
+<td>内置编辑 + 终端</td>
+</tr>
+<tr>
+<td><strong>权限模型</strong></td>
+<td>5 模式 + 7 级规则 + AI 分类器</td>
+<td>编辑器级沙盒</td>
+<td>GitHub 权限</td>
+</tr>
+<tr>
+<td><strong>Hook 系统</strong></td>
+<td>26 事件 × 4 类型</td>
+<td>不公开</td>
+<td>不公开</td>
+</tr>
+<tr>
+<td><strong>上下文管理</strong></td>
+<td>CLAUDE.md + 记忆 + 四级压缩</td>
+<td>.cursorrules + 代码库索引</td>
+<td>.github/copilot-instructions.md</td>
+</tr>
+<tr>
+<td><strong>多 Agent</strong></td>
+<td>5 种 Agent + Swarm 编排</td>
+<td>8 并行 Agent (worktree)</td>
+<td>单 Agent</td>
+</tr>
+<tr>
+<td><strong>MCP 支持</strong></td>
+<td>6 种传输协议</td>
+<td>MCP 支持</td>
+<td>有限</td>
+</tr>
+<tr>
+<td><strong>开源可见度</strong></td>
+<td>源码可分析 (512K LOC)</td>
+<td>闭源</td>
+<td>闭源</td>
+</tr>
+<tr>
+<td><strong>评估集成</strong></td>
+<td>SWE-bench + Headless Profiler</td>
+<td>不公开</td>
+<td>不公开</td>
+</tr>
+<tr>
+<td><strong>市场份额 (2026)</strong></td>
+<td>41%</td>
+<td>~15%</td>
+<td>38%</td>
+</tr>
+</tbody>
+</table>
+<p><em>数据来源: dev.to/raxxostudios, faros.ai, tech-insider.org</em></p>
+<h3 id="162">16.2 关键设计差异分析</h3>
+<p><strong>Claude Code 的独特创新</strong>：
+1. <strong>编译时特性门控</strong>（bun:bundle dead code elimination）—— 竞品无此机制
+2. <strong>纵深防御六层安全模型</strong> —— 最深的安全层次
+3. <strong>YOLO 两阶段分类器</strong> —— 唯一使用独立 AI 审查权限的 Agent
+4. <strong>可逆工具设计</strong>（Edit 用字符串替换而非覆盖）—— 降低破坏风险
+5. <strong>Prompt Cache 稳定性排序</strong> —— 工具排序优化缓存命中率</p>
+<p><strong>Cursor 的独特创新</strong>：
+1. <strong>代码库索引</strong>（全局语义理解）—— Claude Code 依赖 Grep/Glob
+2. <strong>8 并行 Agent + worktree 隔离</strong> —— 更激进的并行策略
+3. <strong>编辑器原生集成</strong> —— diff 预览、内联编辑体验更好</p>
+<p><strong>通用模式（所有竞品共享）</strong>：
+1. 项目级配置文件（CLAUDE.md / .cursorrules / copilot-instructions.md）
+2. 工具调用循环（ReAct 模式）
+3. 权限确认机制
+4. MCP 协议支持（逐步趋同）</p>
+<h3 id="163-opendev">16.3 来自 OpenDev 论文的架构洞察</h3>
+<p>arXiv:2603.05344v1 "Building AI Coding Agents for the Terminal" 提出了几个重要的架构模式：</p>
+<ol>
+<li><strong>Scaffolding vs Harness 分离</strong>：</li>
+<li>Scaffolding = 首次提示前的组装（系统提示编译、工具 schema 生成）</li>
+<li>Harness = 组装后的一切（ReAct 循环、工具调度、安全执行）</li>
+<li>
+<p>Claude Code 的 <code>main.tsx</code>（并行预取）对应 Scaffolding，<code>query.ts</code>（queryLoop）对应 Harness</p>
+</li>
+<li>
+<p><strong>Dual-Mode 通过 Subagent 而非状态机</strong>：</p>
+</li>
+<li>论文发现状态机模式（Plan Mode ↔ Execute Mode 切换）容易卡住</li>
+<li>推荐方案：Plan Mode 作为<strong>工具受限的子 Agent</strong>而非状态切换</li>
+<li>
+<p>Claude Code 的 Plan Mode 正是此设计——<code>EnterPlanModeTool</code> 改变可用工具集</p>
+</li>
+<li>
+<p><strong>Defense-in-Depth 五层 vs Claude Code 六层</strong>：</p>
+</li>
+<li>论文提出五层（Prompt → Schema → Runtime Approval → Tool Validation → Lifecycle Hooks）</li>
+<li>
+<p>Claude Code 增加了第六层：硬编码拒绝（不可配置、不可绕过）</p>
+</li>
+<li>
+<p><strong>Context Pressure 作为中心设计约束</strong>：</p>
+</li>
+<li>论文论证 Token 预算驱动所有下游架构决策</li>
+<li>Claude Code 的四级压缩管道、工具延迟加载、记忆预取全部服务于此</li>
+</ol>
+<hr />
+<h2 id="_12">结语：从读者到构建者</h2>
+<p>恭喜你读到这里。如果你认真消化了前面 14 章的内容，你现在掌握的 Harness Engineering 知识已经超过了大多数 AI 工程师。</p>
+<p>让我用三句话总结全书：</p>
+<ol>
+<li>
+<p><strong>Agent 不是产品，Harness 才是。</strong> 模型会被替换，但你精心设计的权限规则、Hook 管道、沙盒配置——这些才是你的护城河。</p>
+</li>
+<li>
+<p><strong>约束是力量，不是限制。</strong> 每添加一条精确的权限规则，你就能放心让 Agent 做更多事情。纵深防御的六层让 Claude Code 敢于在生产环境中运行 <code>rm</code>、<code>git push</code> 这样的危险命令——因为每一层都在守护。</p>
+</li>
+<li>
+<p><strong>渐进式构建，不要过度设计。</strong> 先用 1 小时搭一个 CLAUDE.md + 基本权限的 Level 1 Harness。遇到痛点了再加 Hook。需要团队协作了再配 MCP 和自定义 Agent。最好的 Harness 是"刚好够用"的 Harness。</p>
+</li>
+</ol>
+<blockquote>
+<p><strong>最后一个思考题</strong>：Claude Code 有 512,664 行代码，但它的 Agent Loop 核心只有一个 <code>while(true)</code> 和一个 State 对象。剩下的 99.9% 代码都在回答同一个问题——"怎样让这个循环在真实世界中可靠运行？" 这就是 Harness Engineering 的全部意义。</p>
+</blockquote>
+<p>现在，去构建你自己的 Harness 吧。</p>
+<hr />
+<h2 id="aclaude-code">附录 A：Claude Code 源码文件索引</h2>
+<h3 id="_13">核心引擎</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>大小</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/main.tsx</code></td>
+<td>803 KB</td>
+<td>入口点，CLI 引导，并行预取</td>
+</tr>
+<tr>
+<td><code>src/query.ts</code></td>
+<td>68 KB</td>
+<td>核心 Agent 循环（queryLoop）</td>
+</tr>
+<tr>
+<td><code>src/QueryEngine.ts</code></td>
+<td>46 KB</td>
+<td>LLM 查询引擎，系统提示构建</td>
+</tr>
+<tr>
+<td><code>src/Tool.ts</code></td>
+<td>29 KB</td>
+<td>Tool 基础接口，60+ 方法</td>
+</tr>
+<tr>
+<td><code>src/tools.ts</code></td>
+<td>25 KB</td>
+<td>Tool 注册表，池组装，缓存稳定</td>
+</tr>
+<tr>
+<td><code>src/Task.ts</code></td>
+<td>3.2 KB</td>
+<td>任务类型定义</td>
+</tr>
+<tr>
+<td><code>src/commands.ts</code></td>
+<td>25 KB</td>
+<td>命令注册，条件导入</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_14">权限与安全</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/utils/permissions/permissions.ts</code></td>
+<td>主权限逻辑，决策管道</td>
+</tr>
+<tr>
+<td><code>src/types/permissions.ts</code></td>
+<td>权限类型定义（13 KB）</td>
+</tr>
+<tr>
+<td><code>src/utils/permissions/permissionsLoader.ts</code></td>
+<td>从设置加载规则</td>
+</tr>
+<tr>
+<td><code>src/utils/permissions/denialTracking.ts</code></td>
+<td>拒绝追踪</td>
+</tr>
+<tr>
+<td><code>src/utils/permissions/yoloClassifier.ts</code></td>
+<td>Auto 模式分类器</td>
+</tr>
+<tr>
+<td><code>src/utils/sandbox/sandbox-adapter.ts</code></td>
+<td>沙盒适配器（985 行）</td>
+</tr>
+<tr>
+<td><code>src/tools/BashTool/shouldUseSandbox.ts</code></td>
+<td>沙盒决策逻辑</td>
+</tr>
+</tbody>
+</table>
+<h3 id="hooks">Hooks</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/utils/hooks.ts</code></td>
+<td>Hook 执行引擎</td>
+</tr>
+<tr>
+<td><code>src/utils/hooks/hooksConfigManager.ts</code></td>
+<td>Hook 配置管理</td>
+</tr>
+<tr>
+<td><code>src/utils/hooks/hooksSettings.ts</code></td>
+<td>Hook 设置加载</td>
+</tr>
+<tr>
+<td><code>src/schemas/hooks.ts</code></td>
+<td>Zod Schema 定义</td>
+</tr>
+<tr>
+<td><code>src/types/hooks.ts</code></td>
+<td>Hook 类型定义</td>
+</tr>
+<tr>
+<td><code>src/services/tools/toolHooks.ts</code></td>
+<td>工具特定 Hook 执行</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_15">设置与配置</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/utils/settings/settings.ts</code></td>
+<td>核心设置管理</td>
+</tr>
+<tr>
+<td><code>src/utils/settings/types.ts</code></td>
+<td>设置 Schema 定义（600+ 行）</td>
+</tr>
+<tr>
+<td><code>src/utils/settings/settingsCache.ts</code></td>
+<td>内存缓存</td>
+</tr>
+<tr>
+<td><code>src/utils/settings/permissionValidation.ts</code></td>
+<td>权限规则验证</td>
+</tr>
+</tbody>
+</table>
+<h3 id="mcp">MCP</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/services/mcp/client.ts</code></td>
+<td>MCP 客户端，6 种传输</td>
+</tr>
+<tr>
+<td><code>src/services/mcp/config.ts</code></td>
+<td>MCP 配置加载</td>
+</tr>
+<tr>
+<td><code>src/skills/mcpSkills.ts</code></td>
+<td>MCP Skills 发现</td>
+</tr>
+</tbody>
+</table>
+<h3 id="agent">Agent 与任务</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/tools/AgentTool/</code></td>
+<td>子 Agent 生成</td>
+</tr>
+<tr>
+<td><code>src/tools/AgentTool/forkSubagent.ts</code></td>
+<td>隐式分叉</td>
+</tr>
+<tr>
+<td><code>src/tools/AgentTool/agentMemory.ts</code></td>
+<td>Agent 记忆</td>
+</tr>
+<tr>
+<td><code>src/coordinator/</code></td>
+<td>多 Agent 编排</td>
+</tr>
+<tr>
+<td><code>src/utils/swarm/</code></td>
+<td>Swarm 协调逻辑</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_16">记忆</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/memdir/memoryScan.ts</code></td>
+<td>记忆扫描</td>
+</tr>
+<tr>
+<td><code>src/memdir/memoryTypes.ts</code></td>
+<td>记忆类型定义</td>
+</tr>
+<tr>
+<td><code>src/services/extractMemories/</code></td>
+<td>自动记忆提取</td>
+</tr>
+<tr>
+<td><code>src/services/teamMemorySync/</code></td>
+<td>团队记忆同步</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ui">状态与 UI</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/state/AppState.tsx</code></td>
+<td>主 React 上下文（23 KB）</td>
+</tr>
+<tr>
+<td><code>src/state/AppStateStore.ts</code></td>
+<td>Zustand-like Store（21 KB）</td>
+</tr>
+<tr>
+<td><code>src/cli/print.ts</code></td>
+<td>富文本打印（212 KB）</td>
+</tr>
+<tr>
+<td><code>src/components/App.tsx</code></td>
+<td>根组件</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="b">附录 B：参考资源</h2>
+<h3 id="_17">开源项目</h3>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>描述</th>
+<th>URL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>learn-claude-code</strong></td>
+<td>12 课时 Harness Engineering 课程</td>
+<td>github.com/shareAI-lab/learn-claude-code</td>
+</tr>
+<tr>
+<td><strong>claude-code-harness</strong></td>
+<td>Plan→Work→Review 循环实现</td>
+<td>github.com/Chachamaru127/claude-code-harness</td>
+</tr>
+<tr>
+<td><strong>your-claude-engineer</strong></td>
+<td>Agent Harness 演示（Slack+GitHub+Linear）</td>
+<td>github.com/coleam00/your-claude-engineer</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_18">学习路径（推荐）</h3>
+<pre><code>第 1 周: 基础
+├── 阅读本教程第 1-3 章
+├── 搭建 Level 1 个人 Harness（CLAUDE.md + 基本权限）
+├── 动手实验: 在自己的项目中使用 Claude Code
+└── 理解: Agent Loop, Tool Dispatch, 计划模式
+
+第 2 周: 约束与安全
+├── 阅读本教程第 4-7 章
+├── 配置 Permission Rules
+├── 编写 PreToolUse Hook
+└── 理解: Permission Model, Hooks, Sandbox
+
+第 3 周: 上下文与记忆
+├── 阅读本教程第 8-9 章
+├── 优化 CLAUDE.md
+├── 配置 Settings 层级
+├── 动手实验: 写一个 PreToolUse Hook
+└── 理解: Context Engineering, Memory, Compaction
+
+第 4 周: 扩展与协作
+├── 阅读本教程第 10-12 章
+├── 配置 MCP 服务器（从 GitHub MCP 开始）
+├── 创建自定义 Agent 和 Skill
+└── 理解: MCP, Sub-Agents, Skills
+
+第 5 周: 多 Agent 与生产化
+├── 阅读本教程第 13-14 章
+├── 搭建团队 Harness
+├── 实现 Plan→Work→Review 循环
+└── 理解: Team Protocols, Worktree Isolation, Entropy Management
+
+第 6 周+: 高级
+├── 深入研究 Claude Code 源码（从 query.ts 开始）
+├── 构建组织级 Harness
+└── 探索: Bridge, Voice, Remote Triggers
+</code></pre>
+<h3 id="_19">关键概念速查表</h3>
+<table>
+<thead>
+<tr>
+<th>概念</th>
+<th>一句话定义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Harness</strong></td>
+<td>Agent 之外的一切基础设施</td>
+</tr>
+<tr>
+<td><strong>Agent Loop</strong></td>
+<td>消息→LLM→工具→循环的核心循环</td>
+</tr>
+<tr>
+<td><strong>Tool</strong></td>
+<td>Agent 与外部世界交互的标准化接口</td>
+</tr>
+<tr>
+<td><strong>Permission Mode</strong></td>
+<td>决定 Agent 自主程度的模式（5 种）</td>
+</tr>
+<tr>
+<td><strong>Permission Rule</strong></td>
+<td>声明性的 allow/deny/ask 规则</td>
+</tr>
+<tr>
+<td><strong>Hook</strong></td>
+<td>生命周期事件的可编程回调（4 种类型）</td>
+</tr>
+<tr>
+<td><strong>Sandbox</strong></td>
+<td>系统级的文件/网络/进程限制</td>
+</tr>
+<tr>
+<td><strong>CLAUDE.md</strong></td>
+<td>项目级的持久上下文文件</td>
+</tr>
+<tr>
+<td><strong>Memory</strong></td>
+<td>跨会话的结构化记忆（4 种类型）</td>
+</tr>
+<tr>
+<td><strong>Compaction</strong></td>
+<td>上下文窗口的压缩策略（4 级）</td>
+</tr>
+<tr>
+<td><strong>MCP</strong></td>
+<td>Model Context Protocol，扩展 Harness 能力</td>
+</tr>
+<tr>
+<td><strong>Sub-Agent</strong></td>
+<td>上下文隔离的子 Agent</td>
+</tr>
+<tr>
+<td><strong>Skill</strong></td>
+<td>可重用的工作流定义</td>
+</tr>
+<tr>
+<td><strong>Plan Mode</strong></td>
+<td>5 阶段的规划工作流</td>
+</tr>
+<tr>
+<td><strong>Worktree</strong></td>
+<td>Git worktree 隔离，防止并行冲突</td>
+</tr>
+<tr>
+<td><strong>Entropy Management</strong></td>
+<td>通过定期维护对抗系统退化</td>
+</tr>
+<tr>
+<td><strong>Feature Gate</strong></td>
+<td>编译时特性开关（bun:bundle）</td>
+</tr>
+<tr>
+<td><strong>Prompt Cache</strong></td>
+<td>工具排序优化的 API 缓存策略</td>
+</tr>
+<tr>
+<td><strong>YOLO Classifier</strong></td>
+<td>两阶段 AI 权限自动审批</td>
+</tr>
+<tr>
+<td><strong>Defense in Depth</strong></td>
+<td>六层安全防护叠加</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<blockquote>
+<p><strong>"Build rippable harnesses — the best harness is the one you eventually don't need."</strong></p>
+<p>本教程基于 Claude Code 源码（2026-03-31 snapshot）逆向工程。所有引用的文件路径和代码模式来自实际源码分析。</p>
+</blockquote>
+<hr />
+<hr />
+<h2 id="_20">参考文献</h2>
+<p>[1] Martin Fowler. "Harness Engineering." martinfowler.com/articles/exploring-gen-ai/harness-engineering.html, 2026.</p>
+<p>[2] OpenAI. "Harness Engineering: Leveraging Codex in an Agent-First World." openai.com/index/harness-engineering/, 2026.</p>
+<p>[3] "Building AI Coding Agents for the Terminal: Scaffolding, Harness, Context Engineering, and Lessons Learned." arXiv:2603.05344v1, 2026.</p>
+<p>[4] "Evaluation and Benchmarking of LLM Agents: A Survey." arXiv:2507.21504v1, 2025.</p>
+<p>[5] Jimenez et al. "SWE-bench: Can Language Models Resolve Real-World GitHub Issues?" ICLR, 2024.</p>
+<p>[6] NxCode. "Harness Engineering: The Complete Guide to Building Systems That Make AI Agents Actually Work." nxcode.io, 2026.</p>
+<p>[7] Phil Schmid. "The Importance of Agent Harness in 2026." philschmid.de/agent-harness-2026, 2026.</p>
+<p>[8] Epsilla. "Harness Engineering: Why the Focus is Shifting from Models to Agent Control Systems." epsilla.com/blogs, 2026.</p>
+<p>[9] EleutherAI. "lm-evaluation-harness: A Framework for Few-Shot Evaluation of Language Models." github.com/EleutherAI/lm-evaluation-harness, 2024.</p>
+<p>[10] Harness Engineering Academy. "What is Harness Engineering? A Complete Introduction." harnessengineering.academy/blog, 2026.</p>
+<hr />
+<p><em>Last updated: 2026-04-01</em></p>
+  </article>
+</div>
+
+<script>
+// Auto-generate TOC from h2/h3 headings
+(function(){
+  const sidebar = document.getElementById('sidebar');
+  const headings = document.querySelectorAll('.article h2, .article h3');
+  let html = '';
+  let currentSection = '';
+  headings.forEach((h, i) => {
+    if (!h.id) h.id = 'heading-' + i;
+    if (h.tagName === 'H2') {
+      html += '<div class="sidebar__section">' + h.textContent.substring(0,30) + '</div>';
+    }
+    const indent = h.tagName === 'H3' ? 'padding-left:2.2rem;font-size:0.78rem;' : '';
+    html += '<a href="#' + h.id + '" style="' + indent + '">' + h.textContent.substring(0,40) + '</a>';
+  });
+  sidebar.innerHTML = html;
+
+  // Highlight current section on scroll
+  const links = sidebar.querySelectorAll('a');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const active = sidebar.querySelector('a[href="#' + entry.target.id + '"]');
+        if (active) { active.classList.add('active'); active.scrollIntoView({block:'nearest'}); }
+      }
+    });
+  }, { rootMargin: '-80px 0px -70% 0px' });
+  headings.forEach(h => observer.observe(h));
+})();
+</script>
+
+</body>
+</html>
