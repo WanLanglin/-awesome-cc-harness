@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(parallel-web)",
+      "Skill(markdown-mermaid-writing)",
+      "Skill(scientific-schematics)"
+    ]
+  }
+}

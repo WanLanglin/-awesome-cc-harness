@@ -1,5 +1,4 @@
 ---
-layout: default
 title: "Harness Engineering 完全指南"
 lang: zh
 ---

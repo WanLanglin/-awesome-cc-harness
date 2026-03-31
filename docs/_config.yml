@@ -2,7 +2,6 @@ title: "Harness Engineering: The Definitive Guide"
 description: "A comprehensive textbook on AI Agent infrastructure design, based on Claude Code source reverse engineering"
 baseurl: ""
 url: ""
-theme: minima
 markdown: kramdown
 kramdown:
   input: GFM
@@ -10,9 +9,10 @@ kramdown:
 
 defaults:
   - scope:
-      path: ""
+      path: "zh"
     values:
-      layout: "default"
-
-plugins:
-  - jekyll-seo-tag
+      layout: null
+  - scope:
+      path: "en"
+    values:
+      layout: null
