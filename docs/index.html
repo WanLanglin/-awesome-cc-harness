@@ -206,13 +206,19 @@ body {
   margin-top: 2rem;
 }
 
+a.chapter-card {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
 .chapter-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1.5rem;
   transition: all 0.3s ease;
-  cursor: default;
+  cursor: pointer;
 }
 
 .chapter-card:hover {
@@ -375,78 +381,78 @@ footer a { color: var(--accent); text-decoration: none; }
   <h2>16 Chapters of Deep Analysis</h2>
 
   <div class="chapters">
-    <div class="chapter-card">
+    <a href="zh/#heading-3" class="chapter-card">
       <div class="chapter-card__num">Chapter 01</div>
       <div class="chapter-card__title">What is Harness Engineering?</div>
       <div class="chapter-card__desc">The three pillars: Context Engineering, Architectural Constraints, Entropy Management. With quantitative ROI data.</div>
       <div class="chapter-card__tags"><span class="tag">Theory</span><span class="tag--green tag">Beginner</span></div>
-    </div>
-    <div class="chapter-card">
+    </a>
+    <a href="zh/#heading-13" class="chapter-card">
       <div class="chapter-card__num">Chapter 02</div>
       <div class="chapter-card__title">Claude Code Architecture</div>
       <div class="chapter-card__desc">512K LOC TypeScript. Bun runtime. React+Ink terminal UI. 37 source directories mapped.</div>
       <div class="chapter-card__tags"><span class="tag">Architecture</span><span class="tag">6 Diagrams</span></div>
-    </div>
-    <div class="chapter-card">
+    </a>
+    <a href="zh/#heading-20" class="chapter-card">
       <div class="chapter-card__num">Chapter 03</div>
       <div class="chapter-card__title">The Agent Loop</div>
       <div class="chapter-card__desc">queryLoop(): 7 continue sites, 10 exit reasons, 4-level compaction, StreamingToolExecutor. Real source code.</div>
       <div class="chapter-card__tags"><span class="tag">Core</span><span class="tag--amber tag">Advanced</span></div>
-    </div>
-    <div class="chapter-card">
+    </a>
+    <a href="zh/#heading-30" class="chapter-card">
       <div class="chapter-card__num">Chapter 04</div>
       <div class="chapter-card__title">Tool System</div>
       <div class="chapter-card__desc">43+ tools. Tool interface with 60+ methods. Partition algorithm. FileEditTool's quote-aware replacement.</div>
       <div class="chapter-card__tags"><span class="tag">Core</span><span class="tag">Real Code</span></div>
-    </div>
-    <div class="chapter-card">
+    </a>
+    <a href="zh/#heading-42" class="chapter-card">
       <div class="chapter-card__num">Chapter 05</div>
       <div class="chapter-card__title">Permission Model</div>
       <div class="chapter-card__desc">5 modes, 7-level hierarchy, YOLO two-stage classifier, defense-in-depth 6 layers.</div>
       <div class="chapter-card__tags"><span class="tag">Security</span><span class="tag--amber tag">Advanced</span></div>
-    </div>
-    <div class="chapter-card">
+    </a>
+    <a href="zh/#heading-55" class="chapter-card">
       <div class="chapter-card__num">Chapter 06</div>
       <div class="chapter-card__title">Hooks System</div>
       <div class="chapter-card__desc">26 events, 4 hook types, async protocol, prompt request protocol, 70% fast-path optimization.</div>
       <div class="chapter-card__tags"><span class="tag">Extensibility</span><span class="tag">Real Code</span></div>
-    </div>
-    <div class="chapter-card">
+    </a>
+    <a href="zh/#heading-66" class="chapter-card">
       <div class="chapter-card__num">Chapter 07</div>
       <div class="chapter-card__title">Sandbox &amp; Security</div>
       <div class="chapter-card__desc">Filesystem, network, process isolation. Hardcoded denials. Git bare repo attack prevention.</div>
       <div class="chapter-card__tags"><span class="tag">Security</span></div>
-    </div>
-    <div class="chapter-card">
+    </a>
+    <a href="zh/#heading-73" class="chapter-card">
       <div class="chapter-card__num">Chapter 08</div>
       <div class="chapter-card__title">Context Engineering</div>
       <div class="chapter-card__desc">CLAUDE.md, 4-type memory system, 4-level compaction pipeline, 200K window budget allocation.</div>
       <div class="chapter-card__tags"><span class="tag">Context</span><span class="tag">Quantitative</span></div>
-    </div>
-    <div class="chapter-card">
+    </a>
+    <a href="zh/#heading-82" class="chapter-card">
       <div class="chapter-card__num">Chapter 09&ndash;12</div>
       <div class="chapter-card__title">Settings, MCP, Agents, Skills</div>
       <div class="chapter-card__desc">7-level config hierarchy, 6 MCP transports, 5 agent types, skill frontmatter parsing.</div>
       <div class="chapter-card__tags"><span class="tag">Infrastructure</span></div>
-    </div>
-    <div class="chapter-card">
+    </a>
+    <a href="zh/#heading-98" class="chapter-card">
       <div class="chapter-card__num">Chapter 13&ndash;14</div>
       <div class="chapter-card__title">Practical Guide &amp; Philosophy</div>
       <div class="chapter-card__desc">3-level harness maturity. 10 design philosophies. Entropy management patterns.</div>
       <div class="chapter-card__tags"><span class="tag">Practice</span><span class="tag--green tag">Beginner</span></div>
-    </div>
-    <div class="chapter-card">
+    </a>
+    <a href="zh/#heading-110" class="chapter-card">
       <div class="chapter-card__num">Chapter 15</div>
       <div class="chapter-card__title">Build a Mini Harness</div>
       <div class="chapter-card__desc">200-line Python implementation from scratch. 5 layers matching Claude Code. Runnable exercises.</div>
       <div class="chapter-card__tags"><span class="tag--green tag">Hands-on</span><span class="tag">Python</span></div>
-    </div>
-    <div class="chapter-card">
+    </a>
+    <a href="zh/#heading-114" class="chapter-card">
       <div class="chapter-card__num">Chapter 16</div>
       <div class="chapter-card__title">Competitor Analysis</div>
       <div class="chapter-card__desc">Claude Code vs Cursor vs Copilot. 12-dimension comparison. OpenDev paper insights.</div>
       <div class="chapter-card__tags"><span class="tag">Analysis</span><span class="tag--amber tag">New</span></div>
-    </div>
+    </a>
   </div>
 </section>
 
