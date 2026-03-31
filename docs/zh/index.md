@@ -1,4 +1,5 @@
 ---
+layout: tutorial
 title: "Harness Engineering 完全指南"
 lang: zh
 ---
@@ -15,7 +16,7 @@ lang: zh
 
 **前置知识**：TypeScript 基础、LLM API 调用经验、基本的系统设计概念。
 
-![Harness Engineering Architecture Overview](images/01_harness_architecture.png)
+![Harness Engineering Architecture Overview](../images/01_harness_architecture.png)
 *图 0-1: Harness Engineering 架构全景 — LLM 被六层 Harness 基础设施环绕：工具系统（43+）、权限模型（5 种模式）、Hooks 系统（26 事件 x 4 类型）、沙盒（文件+网络+进程隔离）、上下文工程（CLAUDE.md + 记忆 + 四级压缩）、设置与配置（7 级层级）。*
 
 ---
@@ -123,7 +124,7 @@ mindmap
         回归检测
 ```
 
-![Three Pillars Time Allocation](images/ch1_pillars_pie.png)
+![Three Pillars Time Allocation](../images/ch1_pillars_pie.png)
 *图 1-2: 三大支柱的工程时间分配 — Context Engineering 占据最大比例（45%），因为"Agent 看不到的信息等于不存在"；Architectural Constraints 次之（35%）；Entropy Management 占 20% 但对长期稳定性至关重要。*
 
 #### 支柱一：Context Engineering（上下文工程）
@@ -175,7 +176,7 @@ mindmap
 
 在深入"为什么现在"之前，让我们用数据说话：
 
-![Harness ROI Comparison](images/ch1_roi_comparison.png)
+![Harness ROI Comparison](../images/ch1_roi_comparison.png)
 *图 1-1: Harness 优化 vs 模型优化的投资回报率对比 — 在 Terminal Bench 得分和开发周期缩短上，Harness 优化的收益远超模型优化，且所需工程时间仅为后者的十分之一。*
 
 | 指标 | 仅模型优化 | 仅 Harness 优化 | 两者结合 |
@@ -230,10 +231,10 @@ mindmap
 | **Feature Flags** | GrowthBook + Bun `bun:bundle` |
 | **Auth** | OAuth 2.0, JWT, macOS Keychain |
 
-![LOC Distribution](images/ch2_loc_distribution.png)
+![LOC Distribution](../images/ch2_loc_distribution.png)
 *图 2-1: Claude Code 各目录代码行数分布 — tools/ 和 utils/ 是最大的两个目录，合计占约 32% 的代码量，反映出工具系统和基础设施工具是 Harness 的核心。*
 
-![Module Counts](images/ch2_module_counts.png)
+![Module Counts](../images/ch2_module_counts.png)
 *图 2-2: 各类别模块数量 — components（144）和 commands（101）数量最多，体现了 Claude Code 作为终端 UI 应用的特征。*
 
 ### 2.2 规模
@@ -979,13 +980,13 @@ return { reason: 'model_error', error }  // 意外异常
 
 这些问题没有标准答案，但思考它们会帮助你理解"为什么"而不仅仅是"怎么做"。
 
-![Agent Loop Complexity Analysis](images/ch3_loop_analysis.png)
+![Agent Loop Complexity Analysis](../images/ch3_loop_analysis.png)
 *图 3-2: (左) 最小实现 vs 生产实现的复杂性对比（对数刻度）— 代码行数增长 60 倍，但每个维度的增长都对应真实的生产需求。(右) 四级压缩管道的 Token 释放效率 — 从 180K 逐级降至 45K。*
 
-![Continue Site Frequency](images/ch3_continue_sites.png)
+![Continue Site Frequency](../images/ch3_continue_sites.png)
 *图 3-3: 7 个 continue 站点的触发频率估计 — "Next Turn"（正常推进）占 95%，错误恢复站点合计约 5%，但正是这 5% 的代码（约 500 行）防止了会话中断和成本失控。*
 
-![Agent Loop State Machine](images/02_agent_loop.png)
+![Agent Loop State Machine](../images/02_agent_loop.png)
 *图 3-1: queryLoop() 状态机 — 展示 7 个 continue 站点、4 级压缩管道、StreamingToolExecutor 并行执行和 10 种终止原因的完整流转。*
 
 ### 3.7 定量分析：Agent Loop 的复杂性度量
@@ -1164,7 +1165,7 @@ function assembleToolPool(builtInTools: Tool[], mcpTools: Tool[]): Tool[] {
 
 ### 4.4 工具执行生命周期
 
-![Tool Execution Pipeline](images/03_tool_pipeline.png)
+![Tool Execution Pipeline](../images/03_tool_pipeline.png)
 *图 4-1: 工具执行管道的 7 步流程 — 从 Zod Schema 验证到 PostToolUse Hook，每一步都可能改变工具的行为或阻止执行。*
 
 用下面的序列图理解一个工具从请求到执行的完整路径——注意 Hook 如何在关键节点介入：
@@ -1450,13 +1451,13 @@ function applyEditToFile(
 
 > **源码批注**：关于内部 Hook 快速路径，源码注释道：*"Fast-path: all hooks are internal callbacks (sessionFileAccessHooks, attributionHooks). These return {} and don't use the abort signal... Measured: 6.01µs → ~1.8µs per PostToolUse hit (-70%)."* 这个 70% 的性能提升来自跳过 span/progress/abortSignal/JSON 解析——对于每次工具调用都要触发的 PostToolUse Hook，这种微优化累积效果显著。
 
-![Tool Categories](images/ch4_tool_categories.png)
+![Tool Categories](../images/ch4_tool_categories.png)
 *图 4-2: 43+ 工具的类别分布 — Core I/O（6 个）是使用频率最高的工具，Advanced（6 个）则通过 feature gate 按需加载。*
 
-![Tool Capability Radar](images/ch4_tool_radar.png)
+![Tool Capability Radar](../images/ch4_tool_radar.png)
 *图 4-3: 核心工具能力雷达图 — 展示并发安全性、只读性、破坏性等维度。FileReadTool 和 GrepTool 是"最安全"的工具（并发安全 + 只读），BashTool 是"最危险"的（可破坏 + 非只读 + 非并发安全）。*
 
-![Tool Latency](images/ch4_tool_latency.png)
+![Tool Latency](../images/ch4_tool_latency.png)
 *图 4-4: 工具执行延迟分布（对数刻度）— 从内部 Hook 的 2µs 到 Agent Explore 的 15 秒，延迟跨越 7 个数量级。这解释了为什么 StreamingToolExecutor 的并发优化如此重要——在多工具场景下，它将总延迟从所有工具之和降为最慢工具的时间。*
 
 ### 4.8 工具分类
@@ -1566,7 +1567,7 @@ mcp__my-server(*)
 
 ### 5.3 纵深防御模型
 
-![Defense in Depth](images/04_defense_in_depth.png)
+![Defense in Depth](../images/04_defense_in_depth.png)
 *图 5-1: 纵深防御六层安全模型 — 从软约束（CLAUDE.md，~95% 遵守率）到硬约束（硬编码拒绝，100% 不可绕过），层层叠加使整体绕过概率趋近于零。*
 
 在深入具体的权限规则之前，先从宏观视角理解 Claude Code 的六层安全架构。这是整个 Harness 最重要的设计模式之一：
@@ -1903,13 +1904,13 @@ function toolMatchesRule(tool, rule): boolean {
 }
 ```
 
-![Permission Funnel](images/ch5_permission_funnel.png)
+![Permission Funnel](../images/ch5_permission_funnel.png)
 *图 5-2: 权限决策漏斗 — 100% 的工具调用经过逐层过滤，最终只有 ~11% 需要昂贵的分类器或用户确认。前 4 步过滤掉了 89% 的调用，全部是零成本的规则匹配。*
 
-![Defense Probability](images/ch5_defense_probability.png)
+![Defense Probability](../images/ch5_defense_probability.png)
 *图 5-3: 纵深防御逐层绕过概率（蓝色柱：单层概率，红色线：累积概率，对数刻度）— 6 层叠加后，累积绕过概率趋近于零。注意第 6 层（硬编码拒绝）的单层概率为 0，使累积概率归零。*
 
-![Decision Matrix](images/ch5_decision_matrix.png)
+![Decision Matrix](../images/ch5_decision_matrix.png)
 *图 5-4: 权限决策矩阵热力图 — 5 种权限模式 × 6 种工具类型的决策结果。绿色=ALLOW，橙色=ASK，红色=DENY。注意 `auto` 模式下 Bash(danger) 仍为 ASK——分类器对高风险操作采取保守策略。*
 
 ### 5.6 定量分析：权限决策的分布
@@ -2039,10 +2040,10 @@ type HookEvent =
   | 'InstructionsLoaded'; // 指令加载完成
 ```
 
-![Hook Frequency](images/ch6_hook_frequency.png)
+![Hook Frequency](../images/ch6_hook_frequency.png)
 *图 6-1: 26 个 Hook 事件的触发频率估计 — PreToolUse 和 PostToolUse 是最频繁的事件（每次工具调用都触发），SessionStart/End 只在会话边界触发。这解释了为什么 PostToolUse 的内部 Hook 有专门的快速路径优化（-70% 延迟）。*
 
-![Hook Cost vs Intelligence](images/ch6_hook_cost_intelligence.png)
+![Hook Cost vs Intelligence](../images/ch6_hook_cost_intelligence.png)
 *图 6-2: Hook 类型的成本-智能度散点图 — Command Hook 在左下角（便宜但简单），Agent Hook 在右上角（昂贵但智能）。虚线分隔四个象限：左上是"理想区域"（智能且便宜），右下是"避免区域"（愚蠢且昂贵）。*
 
 ### 6.2 Hook 生命周期与类型选择
@@ -2490,7 +2491,7 @@ Hook 系统的设计遵循"**数据驱动的可扩展性**"原则。而不是让
 └─────────────────────────────────────────────────┘
 ```
 
-![Sandbox Coverage](images/ch7_sandbox_coverage.png)
+![Sandbox Coverage](../images/ch7_sandbox_coverage.png)
 *图 7-1: 沙盒覆盖范围 — Settings Files、Skills Dir 和 Git Config 被 100% 限制（硬编码 DENY），无法通过配置放开。Filesystem Write 限制率 85%（大部分路径受限，仅允许项目目录）。Process Spawn 限制率最低（50%），因为某些命令（如 Docker）需要绕过沙盒。*
 
 ### 7.2 三大限制维度
@@ -2690,7 +2691,7 @@ function checkDependencies(): { errors: string[], warnings: string[] } {
 
 Context Engineering 是 Harness Engineering 的第一支柱。它管理什么信息在什么时候以什么形式进入模型的上下文窗口。
 
-![Context Engineering Pipeline](images/05_context_engineering.png)
+![Context Engineering Pipeline](../images/05_context_engineering.png)
 *图 8-1: 上下文工程管道 — 信息从多个来源（CLAUDE.md、记忆文件、MCP 指令、环境上下文）流入模型的上下文窗口，经过并行预取、相关性过滤和 Token 预算分配。右侧展示上下文窗口的组成和四级压缩区域。*
 
 ### 8.1 定量分析：上下文窗口的预算分配
@@ -2711,10 +2712,10 @@ Claude Code 的上下文窗口（假设 200K tokens）的典型预算分配：
 >
 > **缓存经济学**：系统提示和工具定义作为缓存前缀（~30-46K tokens）。Anthropic API 的 prompt cache 对前缀匹配的部分不收取输入费用。按 $3/M input tokens 计算，每次 API 调用节省约 $0.0001-0.00014。一个典型会话有 20-50 次 API 调用，总节省约 $0.002-0.007/会话。规模化后（百万级日活），这是显著的成本优化。
 
-![Context Window Allocation](images/ch8_context_allocation.png)
+![Context Window Allocation](../images/ch8_context_allocation.png)
 *图 8-2: 200K 上下文窗口的空间分配 — 对话历史占 70%（140K tokens），是压缩管道的主要目标。系统提示 + 工具定义合计 ~18.5%，这是 prompt cache 的主要受益区域。*
 
-![Compaction Efficiency Curve](images/ch8_compaction_curve.png)
+![Compaction Efficiency Curve](../images/ch8_compaction_curve.png)
 *图 8-3: 四级压缩管道的 Token 增长曲线（50 轮对话）— 红色虚线：无压缩时在第 45 轮突破 200K 限制。紫色线（完整管道）：在第 15 轮触发 Autocompact 后 Token 降至 45K，之后缓慢增长。这使得 Claude Code 可以处理 100+ 轮的长对话而不中断。*
 
 ### 8.2 CLAUDE.md — 项目级持久上下文
@@ -3321,7 +3322,7 @@ async function callMcpTool(
 >
 > Claude Code 的子 Agent 系统正是按这个思路设计的。每个子 Agent 有自己的消息历史、工具集、权限模式和 Token 预算——完全隔离，完成后只返回摘要。
 
-![Multi-Agent Orchestration](images/06_multi_agent.png)
+![Multi-Agent Orchestration](../images/06_multi_agent.png)
 *图 11-1: 多智能体编排架构 — 父 Agent 通过 AgentTool 生成隔离的子 Agent（Explore/Plan/General/Custom/Fork），每个有独立的消息历史、Token 预算和权限模式。底部展示 Coordinator/Swarm 系统和 Worktree 隔离。*
 
 ### 11.1 Agent Tool
@@ -3507,7 +3508,7 @@ Focus on:
 >
 > 关于 Fork Agent 的缓存优化，注释道：*"Fork path: child inherits the PARENT's system prompt (not FORK_AGENT's) for CACHE-IDENTICAL API request prefixes."* 这意味着 Fork 子 Agent 复用父级的 prompt cache，首次 API 调用不需要重新构建缓存——节省约 30-46K tokens 的 cache creation 成本。
 
-![Sub-Agent Token Savings](images/ch11_subagent_savings.png)
+![Sub-Agent Token Savings](../images/ch11_subagent_savings.png)
 *图 11-2: 子 Agent 上下文隔离的 Token 节省 — 在"探索 10 文件"场景中，不使用子 Agent 需要 50K tokens（全部留在上下文），使用子 Agent 只需 2K tokens（仅摘要返回），节省 96%。这种节省在长对话中累积效果显著。*
 
 ### 11.7 任务系统
@@ -3691,7 +3692,7 @@ Plugin 特性:
 >
 > 下面的三个层级不是"选择其一"——而是一条渐进路径。先花 1 小时搭好 Level 1，用几周。然后根据真实痛点升级到 Level 2，再用几个月。最后在组织需要时才考虑 Level 3。
 
-![Harness Maturity Radar](images/ch13_harness_maturity.png)
+![Harness Maturity Radar](../images/ch13_harness_maturity.png)
 *图 13-1: 三级 Harness 成熟度雷达图 — Level 1（绿色）在 Context Management 和 Permission Control 上有基础能力，但缺乏 Multi-Agent、MCP 和企业 MDM。Level 3（紫色）在所有 8 个维度上接近满分。注意 Level 2（黄色）是大多数团队的"甜蜜点"——投入适中但覆盖面广。*
 
 ### 13.1 Level 1: 个人 Harness（1-2 小时）

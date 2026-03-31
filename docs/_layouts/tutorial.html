@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="{{ page.lang | default: 'zh' }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ page.title }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@400;500;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0c0c14;
+  --bg-surface: #141420;
+  --bg-code: #1a1a2e;
+  --text: #e2e0dd;
+  --text-dim: #8888a0;
+  --text-heading: #f0eee8;
+  --accent: #818cf8;
+  --accent-dim: rgba(129,140,248,0.12);
+  --green: #34d399;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --border: #222238;
+  --serif: 'Instrument Serif', Georgia, serif;
+  --mono: 'JetBrains Mono', 'Consolas', monospace;
+  --sans: 'DM Sans', 'Noto Sans SC', system-ui, sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.8;
+  font-size: 16px;
+}
+
+/* Nav bar */
+.topnav {
+  position: sticky; top:0; z-index:100;
+  background: rgba(12,12,20,0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.topnav__title {
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  color: var(--text-heading);
+}
+.topnav__links { display:flex; gap:1.5rem; }
+.topnav__links a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: color 0.2s;
+}
+.topnav__links a:hover { color: var(--accent); }
+
+/* Article container */
+.article {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 3rem 2rem 6rem;
+}
+
+/* Headings */
+h1 {
+  font-family: var(--serif);
+  font-size: 2.5rem;
+  color: var(--text-heading);
+  margin: 3rem 0 1.5rem;
+  line-height: 1.2;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 0.5rem;
+}
+
+h2 {
+  font-family: var(--serif);
+  font-size: 1.8rem;
+  color: var(--text-heading);
+  margin: 3rem 0 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+h3 {
+  font-size: 1.25rem;
+  color: var(--accent);
+  margin: 2rem 0 0.75rem;
+  font-weight: 700;
+}
+
+h4 {
+  font-size: 1.05rem;
+  color: var(--text-heading);
+  margin: 1.5rem 0 0.5rem;
+}
+
+/* Paragraphs */
+p { margin: 0.75rem 0; }
+
+/* Links */
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Blockquotes — teaching callouts */
+blockquote {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-dim);
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+  border-radius: 0 8px 8px 0;
+  font-size: 0.95rem;
+}
+blockquote p { margin: 0.4rem 0; }
+blockquote strong { color: var(--accent); }
+
+/* Code blocks */
+pre {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+}
+p code, li code, td code {
+  background: var(--bg-code);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  font-size: 0.85em;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.9rem;
+}
+th {
+  background: var(--bg-surface);
+  color: var(--accent);
+  font-weight: 700;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid var(--accent);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+td {
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+tr:hover td { background: var(--bg-surface); }
+
+/* Images */
+img {
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin: 1.5rem 0;
+  display: block;
+}
+img + em, p > em:only-child {
+  display: block;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin-top: -0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Lists */
+ul, ol {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+li { margin: 0.3rem 0; }
+
+/* Horizontal rule */
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 3rem 0;
+}
+
+/* Strong */
+strong { color: var(--text-heading); }
+
+/* Mermaid diagrams — hide raw code, show message */
+pre:has(code.language-mermaid) {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  text-align: center;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .article { padding: 1.5rem 1rem 4rem; }
+  h1 { font-size: 1.8rem; }
+  h2 { font-size: 1.4rem; }
+  pre { font-size: 0.78rem; padding: 0.75rem; }
+  table { font-size: 0.8rem; }
+  th, td { padding: 0.4rem 0.5rem; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav__title">awesome-cc-harness</div>
+  <div class="topnav__links">
+    <a href="{{ site.baseurl }}/">Home</a>
+    <a href="{{ site.baseurl }}/zh/">中文</a>
+    <a href="{{ site.baseurl }}/en/">English</a>
+    <a href="https://github.com/WanLanglin/-awesome-cc-harness">GitHub</a>
+  </div>
+</nav>
+
+<article class="article">
+{{ content }}
+</article>
+
+</body>
+</html>

@@ -1,5 +1,5 @@
 ---
-layout: default
+layout: tutorial
 title: "Harness Engineering: The Definitive Guide"
 lang: en
 ---
