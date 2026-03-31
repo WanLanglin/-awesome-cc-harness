@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harness Engineering: The Definitive Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --bg-card: #12121a;
+  --bg-hover: #1a1a28;
+  --text: #e8e6e3;
+  --text-dim: #8a8a9a;
+  --accent: #6366f1;
+  --accent-glow: rgba(99,102,241,0.15);
+  --accent2: #f59e0b;
+  --accent3: #10b981;
+  --border: #1e1e2e;
+  --serif: 'Instrument Serif', Georgia, serif;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'DM Sans', system-ui, sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+/* Hero */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(ellipse at 30% 50%, var(--accent-glow) 0%, transparent 50%),
+              radial-gradient(ellipse at 70% 50%, rgba(245,158,11,0.08) 0%, transparent 50%);
+  animation: drift 20s ease-in-out infinite alternate;
+  z-index: 0;
+}
+
+@keyframes drift {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  100% { transform: translate(-3%, 2%) rotate(1deg); }
+}
+
+/* Grid pattern */
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 60px 60px;
+  opacity: 0.3;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 70%);
+  z-index: 0;
+}
+
+.hero > * { position: relative; z-index: 1; }
+
+.hero__badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 0.4em 1.2em;
+  border-radius: 100px;
+  margin-bottom: 2rem;
+  animation: fadeInUp 0.8s ease-out;
+}
+
+.hero h1 {
+  font-family: var(--serif);
+  font-size: clamp(3rem, 8vw, 7rem);
+  line-height: 1.05;
+  font-weight: 400;
+  max-width: 900px;
+  animation: fadeInUp 0.8s ease-out 0.1s both;
+}
+
+.hero h1 em {
+  font-style: italic;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero__sub {
+  font-size: 1.15rem;
+  color: var(--text-dim);
+  max-width: 600px;
+  margin-top: 1.5rem;
+  animation: fadeInUp 0.8s ease-out 0.2s both;
+}
+
+.hero__stats {
+  display: flex;
+  gap: 3rem;
+  margin-top: 3rem;
+  animation: fadeInUp 0.8s ease-out 0.3s both;
+}
+
+.stat { text-align: center; }
+.stat__num {
+  font-family: var(--mono);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.stat__label {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Language selector */
+.lang-section {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 3rem;
+  animation: fadeInUp 0.8s ease-out 0.4s both;
+}
+
+.lang-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 1rem;
+  font-family: var(--sans);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.lang-btn:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px var(--accent-glow);
+}
+
+.lang-btn__flag { font-size: 1.5rem; }
+.lang-btn__name { font-weight: 700; }
+.lang-btn__desc { font-size: 0.8rem; color: var(--text-dim); }
+
+/* Content sections */
+.content {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 6rem 2rem;
+}
+
+.section-label {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 1rem;
+}
+
+.content h2 {
+  font-family: var(--serif);
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-weight: 400;
+  margin-bottom: 2rem;
+}
+
+/* Chapter grid */
+.chapters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.25rem;
+  margin-top: 2rem;
+}
+
+.chapter-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+  cursor: default;
+}
+
+.chapter-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 40px var(--accent-glow);
+}
+
+.chapter-card__num {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.chapter-card__title {
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  margin: 0.5rem 0;
+}
+
+.chapter-card__desc {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.chapter-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.tag {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  padding: 0.2em 0.6em;
+  border-radius: 4px;
+  background: rgba(99,102,241,0.1);
+  color: var(--accent);
+  border: 1px solid rgba(99,102,241,0.2);
+}
+
+.tag--green { background: rgba(16,185,129,0.1); color: var(--accent3); border-color: rgba(16,185,129,0.2); }
+.tag--amber { background: rgba(245,158,11,0.1); color: var(--accent2); border-color: rgba(245,158,11,0.2); }
+
+/* Features */
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  margin-top: 3rem;
+}
+
+.feature {
+  padding: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.feature__icon {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.feature__title {
+  font-family: var(--serif);
+  font-size: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.feature__desc {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+/* Footer */
+footer {
+  text-align: center;
+  padding: 4rem 2rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+footer a { color: var(--accent); text-decoration: none; }
+
+/* Animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .hero__stats { flex-direction: column; gap: 1.5rem; }
+  .lang-section { flex-direction: column; }
+  .features { grid-template-columns: 1fr; }
+  .chapters { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<section class="hero">
+  <span class="hero__badge">Based on 512,664 Lines of Source Code</span>
+  <h1>Harness<br><em>Engineering</em></h1>
+  <p class="hero__sub">
+    A definitive textbook on AI Agent infrastructure design, reverse-engineered from Claude Code's production source.
+  </p>
+
+  <div class="hero__stats">
+    <div class="stat">
+      <div class="stat__num">16</div>
+      <div class="stat__label">Chapters</div>
+    </div>
+    <div class="stat">
+      <div class="stat__num">4,922</div>
+      <div class="stat__label">Lines</div>
+    </div>
+    <div class="stat">
+      <div class="stat__num">280</div>
+      <div class="stat__label">Code Blocks</div>
+    </div>
+    <div class="stat">
+      <div class="stat__num">34</div>
+      <div class="stat__label">Diagrams</div>
+    </div>
+  </div>
+
+  <div class="lang-section">
+    <a href="zh/" class="lang-btn">
+      <span class="lang-btn__flag">&#x1F1E8;&#x1F1F3;</span>
+      <div>
+        <div class="lang-btn__name">&#x4E2D;&#x6587;&#x7248;</div>
+        <div class="lang-btn__desc">&#x5B8C;&#x6574;&#x4E2D;&#x6587;&#x6559;&#x7A0B;</div>
+      </div>
+    </a>
+    <a href="en/" class="lang-btn">
+      <span class="lang-btn__flag">&#x1F1EC;&#x1F1E7;</span>
+      <div>
+        <div class="lang-btn__name">English</div>
+        <div class="lang-btn__desc">Full English Version</div>
+      </div>
+    </a>
+  </div>
+</section>
+
+<section class="content">
+  <div class="section-label">What's Inside</div>
+  <h2>16 Chapters of Deep Analysis</h2>
+
+  <div class="chapters">
+    <div class="chapter-card">
+      <div class="chapter-card__num">Chapter 01</div>
+      <div class="chapter-card__title">What is Harness Engineering?</div>
+      <div class="chapter-card__desc">The three pillars: Context Engineering, Architectural Constraints, Entropy Management. With quantitative ROI data.</div>
+      <div class="chapter-card__tags"><span class="tag">Theory</span><span class="tag--green tag">Beginner</span></div>
+    </div>
+    <div class="chapter-card">
+      <div class="chapter-card__num">Chapter 02</div>
+      <div class="chapter-card__title">Claude Code Architecture</div>
+      <div class="chapter-card__desc">512K LOC TypeScript. Bun runtime. React+Ink terminal UI. 37 source directories mapped.</div>
+      <div class="chapter-card__tags"><span class="tag">Architecture</span><span class="tag">6 Diagrams</span></div>
+    </div>
+    <div class="chapter-card">
+      <div class="chapter-card__num">Chapter 03</div>
+      <div class="chapter-card__title">The Agent Loop</div>
+      <div class="chapter-card__desc">queryLoop(): 7 continue sites, 10 exit reasons, 4-level compaction, StreamingToolExecutor. Real source code.</div>
+      <div class="chapter-card__tags"><span class="tag">Core</span><span class="tag--amber tag">Advanced</span></div>
+    </div>
+    <div class="chapter-card">
+      <div class="chapter-card__num">Chapter 04</div>
+      <div class="chapter-card__title">Tool System</div>
+      <div class="chapter-card__desc">43+ tools. Tool interface with 60+ methods. Partition algorithm. FileEditTool's quote-aware replacement.</div>
+      <div class="chapter-card__tags"><span class="tag">Core</span><span class="tag">Real Code</span></div>
+    </div>
+    <div class="chapter-card">
+      <div class="chapter-card__num">Chapter 05</div>
+      <div class="chapter-card__title">Permission Model</div>
+      <div class="chapter-card__desc">5 modes, 7-level hierarchy, YOLO two-stage classifier, defense-in-depth 6 layers.</div>
+      <div class="chapter-card__tags"><span class="tag">Security</span><span class="tag--amber tag">Advanced</span></div>
+    </div>
+    <div class="chapter-card">
+      <div class="chapter-card__num">Chapter 06</div>
+      <div class="chapter-card__title">Hooks System</div>
+      <div class="chapter-card__desc">26 events, 4 hook types, async protocol, prompt request protocol, 70% fast-path optimization.</div>
+      <div class="chapter-card__tags"><span class="tag">Extensibility</span><span class="tag">Real Code</span></div>
+    </div>
+    <div class="chapter-card">
+      <div class="chapter-card__num">Chapter 07</div>
+      <div class="chapter-card__title">Sandbox &amp; Security</div>
+      <div class="chapter-card__desc">Filesystem, network, process isolation. Hardcoded denials. Git bare repo attack prevention.</div>
+      <div class="chapter-card__tags"><span class="tag">Security</span></div>
+    </div>
+    <div class="chapter-card">
+      <div class="chapter-card__num">Chapter 08</div>
+      <div class="chapter-card__title">Context Engineering</div>
+      <div class="chapter-card__desc">CLAUDE.md, 4-type memory system, 4-level compaction pipeline, 200K window budget allocation.</div>
+      <div class="chapter-card__tags"><span class="tag">Context</span><span class="tag">Quantitative</span></div>
+    </div>
+    <div class="chapter-card">
+      <div class="chapter-card__num">Chapter 09&ndash;12</div>
+      <div class="chapter-card__title">Settings, MCP, Agents, Skills</div>
+      <div class="chapter-card__desc">7-level config hierarchy, 6 MCP transports, 5 agent types, skill frontmatter parsing.</div>
+      <div class="chapter-card__tags"><span class="tag">Infrastructure</span></div>
+    </div>
+    <div class="chapter-card">
+      <div class="chapter-card__num">Chapter 13&ndash;14</div>
+      <div class="chapter-card__title">Practical Guide &amp; Philosophy</div>
+      <div class="chapter-card__desc">3-level harness maturity. 10 design philosophies. Entropy management patterns.</div>
+      <div class="chapter-card__tags"><span class="tag">Practice</span><span class="tag--green tag">Beginner</span></div>
+    </div>
+    <div class="chapter-card">
+      <div class="chapter-card__num">Chapter 15</div>
+      <div class="chapter-card__title">Build a Mini Harness</div>
+      <div class="chapter-card__desc">200-line Python implementation from scratch. 5 layers matching Claude Code. Runnable exercises.</div>
+      <div class="chapter-card__tags"><span class="tag--green tag">Hands-on</span><span class="tag">Python</span></div>
+    </div>
+    <div class="chapter-card">
+      <div class="chapter-card__num">Chapter 16</div>
+      <div class="chapter-card__title">Competitor Analysis</div>
+      <div class="chapter-card__desc">Claude Code vs Cursor vs Copilot. 12-dimension comparison. OpenDev paper insights.</div>
+      <div class="chapter-card__tags"><span class="tag">Analysis</span><span class="tag--amber tag">New</span></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Built by <a href="https://github.com/WanLanglin">WanLanglin</a> &middot; Based on Claude Code source analysis (512K LOC)</p>
+  <p style="margin-top:0.5rem;">awesome-cc-harness &middot; 2026</p>
+</footer>
+
+</body>
+</html>

@@ -1,3 +1,9 @@
+---
+layout: default
+title: "Harness Engineering 完全指南"
+lang: zh
+---
+
 # Harness Engineering: 基于 Claude Code 的完全指南
 
 **A Comprehensive Textbook on AI Agent Infrastructure Design**
