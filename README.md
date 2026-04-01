@@ -34,6 +34,13 @@
 | 15 | **Hands-on: Mini Harness** | 200-line Python from scratch |
 | 16 | **Competitor Analysis** | 12-dimension comparison |
 
+## Related Resources
+
+- [learn-claude-code](https://github.com/shareAI-lab/learn-claude-code) — Progressive 12-session hands-on course, great for building a harness from scratch step by step
+- [claude-code-harness](https://github.com/Chachamaru127/claude-code-harness) — Production-ready Plan→Work→Review plugin for Claude Code
+- [Martin Fowler: Harness Engineering](https://martinfowler.com/articles/exploring-gen-ai/harness-engineering.html) — Concise conceptual framework on the three pillars
+- [arXiv:2603.05344](https://arxiv.org/html/2603.05344v1) — Academic paper on scaffolding vs harness architecture
+
 ## License
 
 Educational and research purposes. Claude Code is property of Anthropic, Inc.
