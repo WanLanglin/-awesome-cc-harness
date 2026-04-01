@@ -310,6 +310,23 @@ src/
 
 ### 2.4 入口点流程
 
+```mermaid
+flowchart TD
+    A["main.tsx 入口"] --> B["并行预取"]
+    B --> B1["MDM 设置<br/>(macOS plutil / Windows reg)"]
+    B --> B2["Keychain 读取<br/>(OAuth + API key)"]
+    B --> B3["API 预连接"]
+    B1 & B2 & B3 --> C["Commander.js CLI 解析器"]
+    C --> D["preAction Hook"]
+    D --> D1["init()"]
+    D --> D2["遥测初始化"]
+    D --> D3["插件加载"]
+    D --> D4["迁移执行"]
+    D --> D5["远程设置"]
+    D1 & D2 & D3 & D4 & D5 --> E["React/Ink 渲染器"]
+    E --> F["交互式 REPL 循环"]
+```
+
 ```
 main.tsx → 并行预取（MDM设置 + Keychain + API预连接）
     ↓
@@ -2457,6 +2474,26 @@ Hook 系统的设计遵循"**数据驱动的可扩展性**"原则。而不是让
 
 沙盒是 Harness 的最后一道防线。即使权限模型和 Hook 都被绕过，沙盒仍然限制 Agent 能做的事情。
 
+```mermaid
+flowchart TD
+    A["BashTool.call()"] --> B{"shouldUseSandbox()"}
+    B -->|"沙盒启用 +<br/>非排除命令"| C["SandboxManager.wrapWithSandbox()"]
+    B -->|"dangerouslyDisable<br/>Sandbox=true"| D["直接执行<br/>(无沙盒)"]
+    B -->|"沙盒未启用"| D
+    C --> E["@anthropic-ai/sandbox-runtime"]
+    E --> F["文件系统限制"]
+    E --> G["网络限制"]
+    E --> H["进程限制"]
+    F --> F1["allowWrite: 项目目录"]
+    F --> F2["denyWrite: .claude/settings*<br/>.claude/skills (硬编码)"]
+    G --> G1["allowedDomains: *.github.com"]
+    G --> G2["deniedDomains: 配置"]
+    H --> H1["bubblewrap 隔离"]
+
+    style F2 fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    style D fill:#fef9c3,stroke:#ca8a04,color:#713f12
+```
+
 ### 7.1 沙盒架构
 
 ```
@@ -2684,6 +2721,32 @@ function checkDependencies(): { errors: string[], warnings: string[] } {
 > Claude Code 在这方面的设计尤为精巧——一个 200 行的记忆索引、一个四级压缩管道、一个并行预取机制，共同构成了业界最精密的 Agent 上下文管理系统。
 
 Context Engineering 是 Harness Engineering 的第一支柱。它管理什么信息在什么时候以什么形式进入模型的上下文窗口。
+
+```mermaid
+flowchart LR
+    subgraph Sources["信息来源"]
+        S1["~/.claude/CLAUDE.md<br/>(全局)"]
+        S2[".claude/CLAUDE.md<br/>(项目)"]
+        S3["子目录/CLAUDE.md<br/>(目录级)"]
+        S4["记忆文件<br/>(4 种类型)"]
+        S5["MCP 服务器指令"]
+        S6["环境上下文<br/>(Git/Terminal/OS)"]
+    end
+    subgraph Processing["处理管道"]
+        P1["并行预取<br/>(using 语义)"]
+        P2["相关性过滤<br/>(≤5 条记忆)"]
+        P3["Token 预算分配"]
+    end
+    subgraph Window["上下文窗口 (200K)"]
+        W1["系统提示 ~6%"]
+        W2["工具定义 ~12.5%"]
+        W3["CLAUDE.md ~3%"]
+        W4["记忆 ~1.5%"]
+        W5["对话历史 ~70%<br/>(可压缩)"]
+        W6["输出预留 ~5%"]
+    end
+    Sources --> Processing --> Window
+```
 
 ![Context Engineering Pipeline](images/05_context_engineering.png)
 *图 8-1: 上下文工程管道 — 信息从多个来源（CLAUDE.md、记忆文件、MCP 指令、环境上下文）流入模型的上下文窗口，经过并行预取、相关性过滤和 Token 预算分配。右侧展示上下文窗口的组成和四级压缩区域。*
@@ -2959,6 +3022,20 @@ function collectContext(): UserContext {
 
 设置系统决定了 Harness 的行为如何被调整和定制。
 
+```mermaid
+flowchart BT
+    U["用户设置 ~/.claude/settings.json"] --> P["项目设置 .claude/settings.json"]
+    P --> L["本地设置 .claude/settings.json.local<br/>(不提交 git)"]
+    L --> Po["策略设置 (组织策略)"]
+    Po --> M["管理设置 (MDM/企业)<br/>支持 drop-in 目录"]
+    M --> F["Flag 设置 (环境变量)"]
+    F --> C["CLI 参数 (最高优先级)"]
+
+    style U fill:#dcfce7,stroke:#16a34a
+    style C fill:#fee2e2,stroke:#dc2626
+    style M fill:#fef9c3,stroke:#ca8a04
+```
+
 ### 9.1 settings.json 结构
 
 ```json
@@ -3123,6 +3200,29 @@ return cached ? structuredClone(cached) : loadAndCache(path)
 > MCP（Model Context Protocol）就是解决方案：一个标准协议，让任何人都能写一个"工具服务器"，Claude Code 自动发现并使用它的工具。这就像 USB 协议一样——你不需要为每种外设重新设计电脑，只需要一个统一的接口。
 >
 > 本章我们来看 Claude Code 如何用 6 种传输协议连接 MCP 服务器，以及它如何将外部工具无缝整合到自己的权限和 Hook 体系中。
+
+```mermaid
+flowchart TD
+    subgraph Config["配置来源"]
+        C1["~/.claude/mcp.json<br/>(用户全局)"]
+        C2[".claude/.mcp.json<br/>(项目级)"]
+        C3["插件自动发现"]
+        C4["Claude.ai 连接器"]
+    end
+    subgraph Connect["连接管理"]
+        D["去重 + 策略过滤<br/>(allowlist/denylist)"]
+        D --> E1["Stdio<br/>(本地, batch~3)"]
+        D --> E2["SSE/HTTP/WS<br/>(远程, batch~20)"]
+        D --> E3["InProcess<br/>(内存, 省 325MB)"]
+    end
+    subgraph Integrate["集成"]
+        F["assembleToolPool()"]
+        F --> G["内置工具排序<br/>(缓存前缀)"]
+        F --> H["MCP 工具排序<br/>(去重, 内置优先)"]
+        G & H --> I["统一工具池<br/>(权限 + Hook 同样适用)"]
+    end
+    Config --> Connect --> Integrate
+```
 
 MCP（Model Context Protocol）允许 Claude Code 连接到外部工具服务器，极大扩展了 Harness 的能力。
 
@@ -3317,7 +3417,30 @@ async function callMcpTool(
 > Claude Code 的子 Agent 系统正是按这个思路设计的。每个子 Agent 有自己的消息历史、工具集、权限模式和 Token 预算——完全隔离，完成后只返回摘要。
 
 ![Multi-Agent Orchestration](images/06_multi_agent.png)
-*图 11-1: 多智能体编排架构 — 父 Agent 通过 AgentTool 生成隔离的子 Agent（Explore/Plan/General/Custom/Fork），每个有独立的消息历史、Token 预算和权限模式。底部展示 Coordinator/Swarm 系统和 Worktree 隔离。*
+*图 11-1: 多智能体编排架构*
+
+```mermaid
+flowchart TD
+    Parent["父 Agent<br/>(完整上下文)"]
+    Parent -->|"Agent(type:'Explore')"| E["Explore Agent<br/>tools: Read,Glob,Grep<br/>只读 | 3 种深度"]
+    Parent -->|"Agent(type:'Plan')"| P["Plan Agent<br/>tools: Read + Plan 文件<br/>只读 + 设计"]
+    Parent -->|"Agent(type:'general')"| G["General Agent<br/>tools: * (全部)<br/>完整能力"]
+    Parent -->|"Agent(自定义 .md)"| C["Custom Agent<br/>tools: 用户定义<br/>Frontmatter 配置"]
+    Parent -->|"隐式 Fork"| F["Fork Agent<br/>继承父级上下文<br/>cache-identical"]
+
+    E & P & G & C & F -->|"返回摘要<br/>(丢弃完整历史)"| Parent
+
+    Parent -->|"TeamCreateTool"| T["Coordinator/Swarm"]
+    T --> W1["Worker 1<br/>(Worktree A)"]
+    T --> W2["Worker 2<br/>(Worktree B)"]
+    T --> W3["Worker 3<br/>(Worktree C)"]
+
+    style E fill:#dbeafe,stroke:#2563eb
+    style P fill:#dcfce7,stroke:#16a34a
+    style G fill:#f3e8ff,stroke:#7c3aed
+    style C fill:#fef3c7,stroke:#d97706
+    style F fill:#f3f4f6,stroke:#6b7280,stroke-dasharray: 5 5
+```
 
 ### 11.1 Agent Tool
 
@@ -3555,6 +3678,32 @@ Git Worktree 隔离模式:
 > Claude Code 的 Skills 系统是它从"编码工具"进化为"工作流平台"的关键。一个 `.md` 文件就能定义一个新的工作流——不需要写 TypeScript，不需要重新编译。
 
 ### 12.1 Skills 系统
+
+```mermaid
+flowchart TD
+    subgraph Sources["Skill 来源 (6 层)"]
+        S1["内置 Skills<br/>(bundled/index.ts)"]
+        S2["用户 Skills<br/>(~/.claude/skills/*.md)"]
+        S3["项目 Skills<br/>(.claude/skills/*.md)"]
+        S4["插件 Skills<br/>(plugin 注册)"]
+        S5["MCP Skills<br/>(MCP 服务器发现)"]
+        S6["Legacy Commands<br/>(.claude/commands/)"]
+    end
+    subgraph Loading["加载管道"]
+        L1["扫描目录"]
+        L2["解析 Frontmatter<br/>(25+ 字段)"]
+        L3["realpath 去重"]
+        L4["注册为 Command"]
+    end
+    subgraph Execution["执行"]
+        E1{"context: 'fork'?"}
+        E1 -->|"是"| E2["分叉子 Agent<br/>(隔离上下文)"]
+        E1 -->|"否"| E3["主 Agent 内执行"]
+        E2 --> E4["返回结果文本"]
+        E3 --> E4
+    end
+    Sources --> Loading --> Execution
+```
 
 Skills 是可重用的工作流定义，类似于"高级宏"。
 
