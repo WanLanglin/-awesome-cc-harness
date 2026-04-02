@@ -51,7 +51,7 @@
 
 > 每一步都有精确的文件路径和行号。不是推测，不是类比。 **[👉 阅读完整分析](docs/zh/grove-system.md)**
 
-### 🛡️ NEW: [反蒸馏防御体系 — Claude Code 如何知道你在蒸馏？](docs/zh/anti-distillation.md)
+### 🛡️ NEW: [Claude Code 是如何知道你在偷偷蒸馏的？— 机制分析](docs/zh/anti-distillation.md)
 
 **从源码中拆解 Anthropic 防止模型被盗的 5 层工程实现：**
 
