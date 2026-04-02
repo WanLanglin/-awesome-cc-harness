@@ -51,6 +51,18 @@
 
 > 每一步都有精确的文件路径和行号。不是推测，不是类比。 **[👉 阅读完整分析](docs/zh/grove-system.md)**
 
+### 🛡️ NEW: [反蒸馏防御体系 — Claude Code 如何知道你在蒸馏？](docs/zh/anti-distillation.md)
+
+**从源码中拆解 Anthropic 防止模型被盗的 5 层工程实现：**
+
+- **Native Client Attestation** — Bun/Zig 原生层注入认证 token，服务端验证客户端真实性
+- **Fingerprint Attribution** — SHA256(salt + 消息特定字符 + 版本号)，每条训练数据可追溯来源
+- **Fake Tools Injection** — 向 API 注入虚假工具定义，蒸馏模型暴露假工具 = 被抓
+- **Signature-Bearing Blocks** — thinking + connector_text 绑定 API key，换 key 立即失效
+- **Streamlined Mode** — 源码直接称为 "distillation-resistant output format"
+
+> **[👉 阅读完整分析](docs/zh/anti-distillation.md)**
+
 ### 📊 77 张专业图表
 
 AI 生成架构图、Mermaid 流程图、Matplotlib 数据可视化，覆盖每一章的核心概念。
