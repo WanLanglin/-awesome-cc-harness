@@ -1,12 +1,20 @@
-# Claude Code 如何知道你在蒸馏？— 5 层反蒸馏防御体系逆向分析
+# Claude Code 是如何知道你在偷偷蒸馏的？— 5 层反蒸馏防御体系逆向分析
 
 > 从 512K 行源码中拆解 Anthropic 防止模型被盗的完整工程实现。每一层都有精确的文件路径和行号。
 
 ---
 
-## 背景
+## 背景：模型蒸馏为什么是 AI 行业的头号威胁？
 
-模型蒸馏（distillation）是 AI 领域最大的商业威胁之一：竞争对手通过录制 API 流量，用大模型的输出训练自己的小模型，以极低成本复制能力。Anthropic 在 Claude Code 客户端中部署了**五层防御体系**来对抗这一威胁。
+模型蒸馏（distillation）是 AI 领域最大的商业威胁之一：竞争对手通过录制 API 流量，用大模型的输出训练自己的小模型，以极低成本复制能力。
+
+这不是理论风险，而是**正在发生的现实**：
+
+- **2025 年 1 月**：OpenAI 公开指控 DeepSeek 通过 API 蒸馏其推理模型，称 DeepSeek-R1 的训练数据包含 OpenAI 模型的输出 [1]。OpenAI 随后加强了推理链（chain-of-thought）的保护，训练模型避免泄露推理路径，并部署分类器检测和屏蔽 CoT 泄漏 [2]。
+- **2026 年 2 月**：Google 披露攻击者用超过 **100,000 个结构化提示**试图克隆 Gemini 的推理逻辑，专门针对"推理链"（reasoning traces）进行提取 [3]。Google 随后训练 Gemini 识别蒸馏探测并主动拒绝配合。
+- **学术界同步跟进**：2025-2026 年出现大量反蒸馏研究，包括基于信息论的抗蒸馏采样 [4]、语义水印指纹 [5]、水印能否阻止蒸馏的实证分析 [6]、以及通过 trace rewriting 防御蒸馏 [7]。
+
+在这一背景下，Anthropic 在 Claude Code 客户端中部署了**五层防御体系**。与竞品不同的是，这些防御的完整实现细节因源码泄露而暴露——这是首次从生产代码层面完整分析一个商业 AI 系统的反蒸馏工程。
 
 以下是从源码中逆向出的完整架构。
 
@@ -396,6 +404,54 @@ flowchart TD
 ```
 
 **最深层的防御其实不在客户端**：真正的核心推理能力（weights）从未离开 Anthropic 的服务器。客户端防御保护的是**训练数据质量**和**API 使用归属**——即使蒸馏者录制了输出，Anthropic 也能追踪来源并在蒸馏后的模型中检测假工具的痕迹。
+
+---
+
+## 与已有分析的对比
+
+Alex Kim 的博客 [8] 首先报道了 fake tools 和 connector text 的存在，但仅描述了代码片段，未分析完整的防御体系。本文的新贡献包括：
+
+1. **五层防御的系统性框架** — 将零散的发现组织为分层防御体系
+2. **Native Client Attestation 的 Zig 实现分析** — 此前未被任何公开分析提及
+3. **Fingerprint 的完整算法还原** — 包括盐值、字符位置、哈希方法
+4. **Streamlined Mode 作为蒸馏抵抗格式** — 源码注释直接称为 "distillation-resistant"，此前未被报道
+5. **防御矩阵和弱点分析** — 从安全研究角度评估每层的有效性和局限
+
+---
+
+## 与学术文献的关联
+
+Anthropic 的反蒸馏实现与近期学术研究存在有趣的映射关系：
+
+| Anthropic 实现 | 对应学术概念 | 相关论文 |
+|---------------|------------|---------|
+| Fake Tools Injection | Radioactive watermarking / Data poisoning | [6] Can LLM Watermarks Robustly Prevent Unauthorized Knowledge Distillation? (ACL 2025) |
+| Fingerprint Attribution | LLM Fingerprinting | [5] LLM Fingerprinting via Semantically Conditioned Watermarks (arXiv 2505.16723) |
+| Connector Text Summarization | Trace rewriting / Output perturbation | [7] Protecting Language Models Against Unauthorized Distillation through Trace Rewriting (arXiv 2602.15143) |
+| Streamlined Mode | Distillation-resistant decoding | [4] Towards Distillation-Resistant LLMs: An Information-Theoretic Perspective (arXiv 2602.03396) |
+| 5 层叠加 | Defense-in-depth for ML systems | [2] IAPS: AI Distillation Attacks — The Case for Targeted Government Intervention |
+
+值得注意的是，学术论文多为理论提出或受控实验，而 Claude Code 是**已部署到数百万用户的生产实现**。这使得本文的分析具有独特的实证价值——我们看到的不是论文中的算法描述，而是 Anthropic 工程师在真实对抗环境中做出的工程权衡。
+
+---
+
+## 参考文献
+
+[1] Berkeley Law. "The Innovation Dilemma: AI Distillation in OpenAI v. DeepSeek." The Network, 2025. https://sites.law.berkeley.edu/thenetwork/2025/03/30/the-innovation-dilemma-ai-distillation-in-openai-v-deepseek/
+
+[2] IAPS. "AI Distillation Attacks: The Case for Targeted Government Intervention." Institute for AI Policy and Strategy, 2026. https://www.iaps.ai/research/ai-distillation-attacks
+
+[3] Google Cloud Blog. "GTIG AI Threat Tracker: Distillation, Experimentation, and Integration of AI for Adversarial Use." 2026. https://cloud.google.com/blog/topics/threat-intelligence/distillation-experimentation-integration-ai-adversarial-use
+
+[4] arXiv:2602.03396. "Towards Distillation-Resistant Large Language Models: An Information-Theoretic Perspective." 2026. https://arxiv.org/abs/2602.03396
+
+[5] arXiv:2505.16723. "LLM Fingerprinting via Semantically Conditioned Watermarks." 2025. https://arxiv.org/abs/2505.16723
+
+[6] arXiv:2502.11598. "Can LLM Watermarks Robustly Prevent Unauthorized Knowledge Distillation?" ACL 2025 Main. https://arxiv.org/abs/2502.11598
+
+[7] arXiv:2602.15143. "Protecting Language Models Against Unauthorized Distillation through Trace Rewriting." 2026. https://arxiv.org/abs/2602.15143
+
+[8] Alex Kim. "The Claude Code Source Leak: fake tools, frustration regexes, undercover mode, and more." 2026. https://alex000kim.com/posts/2026-03-31-claude-code-source-leak/
 
 ---
 
