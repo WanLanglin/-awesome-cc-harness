@@ -117,7 +117,7 @@ images/                          # 77 张图表
 
 ## 作者
 
-**WanLanglin** · 微信: felixwll · Open to opportunities in AI Agent Infrastructure · 欢迎交流
+**WanLanglin** · 微信: felixwll · Open to Agentic AI opportunities · 欢迎交流
 
 ---
 
