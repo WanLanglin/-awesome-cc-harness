@@ -96,7 +96,7 @@ images/                          # 77 张图表
 
 ## 作者
 
-**WanLanglin** · 微信: felixwll
+**WanLanglin** · 微信: felixwll · 对 AI Agent 基础设施方向很感兴趣，欢迎交流
 
 ---
 
