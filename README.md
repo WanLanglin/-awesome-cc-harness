@@ -38,9 +38,18 @@
 | 第 15 章 | **Hands-on: Mini Harness** | 200 行 Python 从零实现一个可运行的 Harness |
 | 第 16 章 | **竞品对比** | Claude Code vs Cursor vs Copilot 12 维对比 |
 
-### 🔬 更多发现（持续更新中）
+### 🔬 NEW: [Grove 系统 — Claude Code 中从未被报道的训练数据基础设施](docs/zh/grove-system.md)
 
-在逆向过程中还发现了大量关于 Anthropic 数据飞轮、YOLO 分类器架构、RL 训练管道等方面的有价值内容，后续会进一步整理分享，敬请关注。
+**在源码中发现了 Anthropic 从用户键盘到 BigQuery 训练数据仓库的完整数据链路：**
+
+- **Grove 系统** — UI 明确写着 "train and improve"，开启后数据保留从 30 天延长至 **5 年**
+- **796 个 telemetry 事件** × 双路管道 — Datadog 拿脱敏数据，1P API 拿完整数据写入 **BigQuery 特权列**
+- **Protobuf schema** — 865 行生成代码，外部 monorepo `go/cc-logging` 编译时强制
+- **SWE-bench 嵌入每个 telemetry 事件** — eval 数据和用户数据走**同一条管道、同一个 BigQuery**
+- **开发者注释直接写着 "training data"** — `messages.ts:245` + `sessionStorage.ts:4388`
+- **Aider 竞品检测** — 追踪用户是否同时使用竞品工具
+
+> 每一步都有精确的文件路径和行号。不是推测，不是类比。 **[👉 阅读完整分析](docs/zh/grove-system.md)**
 
 ### 📊 77 张专业图表
 
