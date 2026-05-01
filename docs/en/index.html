@@ -179,6 +179,610 @@ pre:has(code.language-mermaid) { background:var(--accent-dim); border-color:var(
 
 <div class="main">
   <article class="article" id="article">
+
+<p><em>Two reverse-engineered findings on Claude Code's data and security infrastructure that haven't been publicly documented elsewhere. The full Harness Engineering textbook follows below.</em></p>
+
+<hr />
+
+<h2 id="grove-system">🔬 Grove: The Hidden Training-Data Pipeline in Claude Code's Source</h2>
+
+<p><strong>From a user's keyboard to BigQuery's training warehouse — a complete, source-verifiable data pipeline.</strong></p>
+
+<blockquote>
+<p>While reverse-engineering Claude Code's 512K LOC TypeScript source, I found a previously unreported infrastructure for training-data collection. Not speculation, not analogy — every step has a precise file path and line number. This section traces the full pipeline.</p>
+</blockquote>
+
+<h3 id="grove-tldr">One-sentence summary</h3>
+
+<p>Anthropic ships a system named <strong>"Grove"</strong> in Claude Code that explicitly tells users their data will be used to <em>"train and improve"</em> models, extends data retention from 30 days to <strong>5 years</strong>, ships 796 telemetry events through a Protobuf-typed dual pipeline, and lands them in privileged BigQuery columns. The same pipeline carries SWE-bench evaluation IDs — meaning training-data collection and agent-capability evaluation share the same infrastructure.</p>
+
+<h3 id="grove-ring1">Ring 1: Grove — "Help Improve Claude"</h3>
+
+<p>In Claude Code's source, a component named <code>Grove</code> (<code>src/components/grove/Grove.tsx</code>) presents users with a toggle:</p>
+
+<pre><code class="language-typescript">// src/components/grove/Grove.tsx
+
+// Line 47:
+&lt;Text bold={true}&gt;You can help improve Claude &lt;/Text&gt;
+
+// Line 56 — the key copy:
+"Allow the use of your chats and coding sessions to train and improve
+ Anthropic AI models. Change anytime in your Privacy Settings."
+
+// Line 63 — data-retention notice:
+"Updates to data retention — To help us improve our AI models and safety
+ protections, we're extending data retention to 5 years."
+
+// Line 116 — what the retention actually means:
+"Turning ON the improve Claude setting extends data retention from
+ 30 days to 5 years. Turning it OFF keeps the default 30-day data
+ retention. Delete data anytime."
+</code></pre>
+
+<p>This is not a hidden backdoor. It's Anthropic's official, user-facing training-data collection mechanism. What hasn't been publicly analyzed is the <strong>engineering implementation</strong> behind it.</p>
+
+<h4>Grove's type definitions</h4>
+
+<pre><code class="language-typescript">// src/services/api/grove.ts Lines 25-35:
+export type AccountSettings = {
+  grove_enabled: boolean | null       // user opted into "Help improve Claude"
+  grove_notice_viewed_at: string | null
+}
+
+export type GroveConfig = {
+  grove_enabled: boolean
+  domain_excluded: boolean            // some orgs/domains are excluded
+  notice_is_grace_period: boolean     // within the grace window
+  notice_reminder_frequency: number | null
+}
+
+// API endpoints:
+// GET   /api/oauth/account/settings
+// POST  /api/oauth/account/grove_notice_viewed
+// PATCH /api/oauth/account/settings
+// GET   /api/claude_code_grove
+</code></pre>
+
+<p><strong>Worth noting:</strong> the <code>domain_excluded</code> field means certain enterprise customers' data is auto-excluded from training. <code>grove_enabled</code> is the toggle — flip it on, and your retention silently jumps from 30 days to <strong>5 years</strong>.</p>
+
+<blockquote>
+<p><strong>Why 5 years?</strong> Product analytics typically retains data for 30–90 days. The most plausible explanation for 5-year retention is that the data feeds training datasets — and training datasets have a much longer lifecycle than ops logs.</p>
+</blockquote>
+
+<h3 id="grove-ring2">Ring 2: 796 telemetry events × dual pipeline</h3>
+
+<p>Claude Code's telemetry runs regardless of the Grove switch — Grove controls <strong>retention duration</strong> (30 days vs 5 years), not whether collection happens. The source contains <strong>796 unique analytics event names</strong> prefixed with <code>tengu_</code>. Every API call, every tool execution, every permission decision, every Bash command — all logged.</p>
+
+<p>These events flow through a dual pipeline:</p>
+
+<table>
+<thead>
+<tr><th>Channel</th><th>Endpoint</th><th>Payload</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Datadog</strong></td><td><code>logs.us5.datadoghq.com</code></td><td>Redacted (<code>_PROTO_*</code> stripped)</td><td>Ops monitoring</td></tr>
+<tr><td><strong>1P (first-party)</strong></td><td><code>/api/event_logging/batch</code></td><td><strong>Full payload</strong> incl. privileged fields</td><td>Lands in BigQuery</td></tr>
+</tbody>
+</table>
+
+<pre><code class="language-typescript">// src/services/analytics/sink.ts Lines 48-71:
+function logEventImpl(eventName: string, metadata: LogEventMetadata): void {
+  const sampleResult = shouldSampleEvent(eventName)
+  if (sampleResult === 0) return
+
+  if (shouldTrackDatadog()) {
+    // Datadog only sees redacted data
+    void trackDatadogEvent(eventName, stripProtoFields(metadataWithSampleRate))
+  }
+
+  // 1P gets the full payload, including _PROTO_* privileged fields
+  logEventTo1P(eventName, metadataWithSampleRate)
+}
+</code></pre>
+
+<pre><code class="language-typescript">// src/services/analytics/firstPartyEventLoggingExporter.ts Lines 714-750:
+// _PROTO_* keys are PII-tagged values meant only for privileged BQ
+// columns. Hoist known keys to proto fields, then defensively strip any
+// remaining _PROTO_* so an unrecognized future key can't silently land
+// in the general-access additional_metadata blob.
+</code></pre>
+
+<p><strong>That comment spells out the architecture:</strong> <code>_PROTO_*</code> fields are routed to <em>privileged columns</em> in BigQuery, physically isolated from general-access analytics data. This isn't a casual product log — it's an intentionally tiered, segregated data warehouse.</p>
+
+<h3 id="grove-ring3">Ring 3: Protobuf schema — production-grade data pipeline</h3>
+
+<p>These events aren't ad-hoc JSON blobs. They're strictly defined by a <strong>Protobuf schema</strong>, compiled from an external monorepo:</p>
+
+<pre><code class="language-typescript">// src/services/analytics/firstPartyEventLoggingExporter.ts:
+// Adding a field? Update the monorepo proto first (go/cc-logging):
+//   event_schemas/.../claude_code/v1/claude_code_internal_event.proto
+// then run `bun run generate:proto` here.
+//
+// claude_code_internal_event.ts — 865 lines of generated proto code
+</code></pre>
+
+<p>The generated schema defines 29 fields:</p>
+
+<pre><code class="language-protobuf">message ClaudeCodeInternalEvent {
+  string event_name = 1;
+  Date   client_timestamp = 2;
+  string model = 3;
+  string session_id = 4;
+  string user_type = 5;                // "ant" vs "external"
+  EnvironmentMetadata env = 7;         // platform, version, CI flags, 30+ subfields
+  string additional_metadata = 13;     // event-specific data (BASE64 JSON)
+  string device_id = 17;
+
+  // ⬇️ These three are the surprising part
+  string swe_bench_run_id = 18;
+  string swe_bench_instance_id = 19;
+  string swe_bench_task_id = 20;
+
+  // Swarm/team agent attribution
+  string agent_id = 22;
+  string parent_session_id = 23;
+  string agent_type = 24;
+
+  // PII privileged columns
+  string skill_name = 27;
+  string plugin_name = 28;
+  string marketplace_name = 29;
+}
+</code></pre>
+
+<p><strong>Three things this tells us:</strong></p>
+
+<ol>
+<li><strong>Not a temporary analytics hack</strong> — Protobuf + external monorepo (<code>go/cc-logging</code>) + compile-time enforcement = production-grade data-pipeline infrastructure.</li>
+<li><strong>SWE-bench fields are embedded in every event</strong> — not a separate eval system; they share the same pipeline as user data.</li>
+<li><strong>Dedicated PII privileged columns</strong> — <code>skill_name</code>, <code>plugin_name</code> are isolated, indicating tiered data management.</li>
+</ol>
+
+<h3 id="grove-ring4">Ring 4: SWE-bench — evals and training data share the pipeline</h3>
+
+<p>This is the most surprising finding. The three SWE-bench IDs aren't off in some standalone eval script — they're embedded in the Proto schema of <strong>every</strong> analytics event.</p>
+
+<pre><code class="language-typescript">// src/services/analytics/metadata.ts Lines 722-724:
+sweBenchRunId:      process.env.SWE_BENCH_RUN_ID || '',
+sweBenchInstanceId: process.env.SWE_BENCH_INSTANCE_ID || '',
+sweBenchTaskId:     process.env.SWE_BENCH_TASK_ID || '',
+
+// Lines 912-920 — written into the Proto event:
+if (coreFields.sweBenchRunId) {
+  core.swe_bench_run_id = coreFields.sweBenchRunId
+}
+</code></pre>
+
+<p>What this means: when Anthropic runs SWE-bench internally, all 796 <code>tengu_*</code> events get tagged with <code>swe_bench_run_id</code> + <code>swe_bench_instance_id</code> + <code>swe_bench_task_id</code>. In BigQuery, they can do <strong>full agent-trajectory analysis per SWE-bench problem</strong> — which tools fired, how many tokens each API call cost, what the permission classifier decided, whether each command succeeded.</p>
+
+<blockquote>
+<p><strong>Implication:</strong> Claude Code is not just a product. It's also Anthropic's <strong>agent-capability evaluation platform</strong>. Eval data and user-interaction data share the same Protobuf schema, the same pipeline, and the same BigQuery warehouse.</p>
+</blockquote>
+
+<p>Combined with the full evaluation harness CLI surface:</p>
+
+<pre><code class="language-typescript">// src/main.tsx — eval-related CLI flags:
+'-p, --print'              // non-interactive mode, exit after output
+'--output-format &lt;format&gt;' // "text" | "json" | "stream-json"
+'--max-turns &lt;turns&gt;'      // max agent turns
+'--max-budget-usd &lt;amount&gt;'// budget limit
+'--json-schema &lt;schema&gt;'   // structured output validation
+</code></pre>
+
+<p>This is a <strong>complete evaluation loop</strong>: env vars tag the task → <code>--print</code> mode runs non-interactively → streaming NDJSON output → exit code signals success/failure → all telemetry lands in BigQuery.</p>
+
+<h3 id="grove-ring5">Ring 5: Developer comments — "training data"</h3>
+
+<p>Two internal developer comments are the most direct evidence:</p>
+
+<pre><code class="language-typescript">// src/utils/messages.ts Line 245:
+"content is fake, which poisons training data if submitted"
+
+// src/utils/sessionStorage.ts Line 4388:
+"Ant transcripts keep the wrapper so /share training data sees REPL usage"
+</code></pre>
+
+<p>The first says certain content "poisons training data" — the developer <em>knows</em> message content lands in the training pipeline.</p>
+
+<p>The second describes <code>/share</code> data as "training data" — the most direct textual evidence.</p>
+
+<h3 id="grove-ring6">Ring 6: Five-layer performance telemetry</h3>
+
+<p>Beyond functional data, Anthropic has embedded a five-layer performance-measurement system:</p>
+
+<table>
+<thead>
+<tr><th>Layer</th><th>Implementation</th><th>Sampling</th><th>Output sink</th></tr>
+</thead>
+<tbody>
+<tr><td>Headless Latency Profiler</td><td><code>headlessProfiler.ts</code></td><td>100% internal / 5% external</td><td><code>tengu_headless_latency</code> event</td></tr>
+<tr><td>Frame Timing</td><td><code>interactiveHelpers.tsx</code></td><td>On demand</td><td>Local JSONL files</td></tr>
+<tr><td>FPS Tracker</td><td><code>fpsTracker.ts</code></td><td>Continuous</td><td>avgFps + P99 frame time</td></tr>
+<tr><td>Perfetto Chrome Trace</td><td><code>perfettoTracing.ts</code></td><td><strong>Internal only</strong></td><td><code>~/.claude/traces/</code></td></tr>
+<tr><td>OpenTelemetry</td><td><code>instrumentation.ts</code></td><td>Continuous</td><td>OTLP / Prometheus / <strong>BigQuery</strong></td></tr>
+</tbody>
+</table>
+
+<p>Note the last row: OpenTelemetry's exporter list includes <strong>BigQuery</strong>. Performance data flows into the same warehouse.</p>
+
+<h3 id="grove-ring7">Ring 7: Competitor detection</h3>
+
+<p>A small but telling detail:</p>
+
+<pre><code class="language-typescript">// src/utils/codeIndexing.ts Lines 52, 82:
+// Detect aider CLI and MCP server
+// CLI: 'aider'
+// MCP: /^aider$/i
+// Use: track Claude Code coexisting with competitors in analytics
+</code></pre>
+
+<p>Anthropic tracks whether users run competitor tools (Aider) alongside Claude Code. That data also flows into BigQuery.</p>
+
+<h3 id="grove-full-pipeline">Full pipeline diagram</h3>
+
+<pre>User interaction (every tool call, API request, Bash command)
+  │
+  ├─ grove_enabled = true → retention = 5 years
+  │
+  ▼
+796 tengu_* events × 40+ metadata fields
+  │
+  ├─→ Datadog (redacted, _PROTO_* stripped) → ops monitoring
+  │
+  └─→ 1P API /api/event_logging/batch (full payload)
+       │
+       ├─ Protobuf schema, strictly typed (865 lines generated)
+       ├─ _PROTO_* fields → BigQuery privileged columns (isolated)
+       ├─ SWE-bench IDs embedded → eval shares the pipeline
+       │
+       ▼
+     BigQuery warehouse
+       │
+       ├─ Feedback text "approved for BQ" (after PII redaction)
+       ├─ Transcript shares → POST /api/claude_code_shared_session_transcripts
+       ├─ OpenTelemetry performance data
+       ├─ Competitor-tool detection
+       │
+       ▼
+     Developer comments confirm: "training data"
+       │
+       ▼
+     ???? (server-side training process, not visible to client)
+</pre>
+
+<h3 id="grove-why-it-matters">Why this pipeline matters</h3>
+
+<ol>
+<li><strong>It's complete</strong> — every step from UI toggle to BigQuery privileged columns has a source line number.</li>
+<li><strong>It's tiered</strong> — Datadog gets redacted, 1P gets the full payload, BigQuery has privileged-column isolation.</li>
+<li><strong>It's reused</strong> — SWE-bench evals and user data share the same pipeline and schema.</li>
+<li><strong>It's not speculation</strong> — Grove UI literally says "train and improve"; developer comments literally say "training data".</li>
+<li><strong>It hasn't been reported</strong> — as of publication, no public analysis mentions "Grove", BigQuery privileged columns, or the SWE-bench-shares-telemetry finding.</li>
+</ol>
+
+<h3 id="grove-what-we-dont-know">What I cannot verify from the client source</h3>
+
+<p>To be honest about the limits of this analysis:</p>
+
+<ul>
+<li>What method Anthropic uses to train (RLHF? DPO? GRPO?)</li>
+<li>How BigQuery data is preprocessed and filtered</li>
+<li>Whether SWE-bench eval data is used directly for training, or only for evaluation</li>
+<li>How preference pairs are assembled server-side (no preference-pair construction in client code)</li>
+</ul>
+
+<p>None of those gaps weaken the core finding: <strong>the complete data pipeline from a user's keyboard to BigQuery's training warehouse is verifiable in the client source code.</strong></p>
+
+<hr />
+
+<h2 id="anti-distillation">🛡️ How Claude Code Detects You Distilling Its Model — A 5-Layer Defense, Reverse-Engineered</h2>
+
+<blockquote>
+<p>Reverse-engineered from 512K lines of source: the complete engineering implementation Anthropic ships to prevent model theft. Each layer has a precise file path and line number.</p>
+</blockquote>
+
+<h3 id="distill-context">Why distillation is the AI industry's #1 threat</h3>
+
+<p>Model distillation — recording API traffic from a frontier model and using its outputs to train a smaller model — is one of the largest commercial threats in AI. Replicate capabilities at a fraction of the cost.</p>
+
+<p>This isn't theoretical. It's <strong>actively happening</strong>:</p>
+
+<ul>
+<li><strong>January 2025</strong>: OpenAI publicly accused DeepSeek of distilling its reasoning models via the API, claiming DeepSeek-R1's training data contained OpenAI model outputs [1]. OpenAI subsequently hardened chain-of-thought protection, training models to avoid leaking reasoning paths and deploying classifiers to detect and block CoT leakage [2].</li>
+<li><strong>February 2026</strong>: Google disclosed that attackers used <strong>over 100,000 structured prompts</strong> to clone Gemini's reasoning logic — specifically targeting "reasoning trace" extraction [3]. Google then trained Gemini to recognize distillation probes and refuse to comply.</li>
+<li><strong>Academic follow-up</strong>: 2025–2026 saw a surge in anti-distillation research, including information-theoretic distillation-resistant sampling [4], semantic watermark fingerprinting [5], empirical analyses of whether watermarks block distillation [6], and trace rewriting as a defense [7].</li>
+</ul>
+
+<p>Against this backdrop, Anthropic shipped a <strong>5-layer defense system</strong> in Claude Code. Unlike competitors', the full implementation is exposed via source — making this the first complete, production-level analysis of a commercial AI system's anti-distillation engineering.</p>
+
+<h3 id="distill-overview">Overview: 5 layers</h3>
+
+<p><img alt="Anti-distillation: 5-layer defense overview" src="../images/anti_distill_1_overview.png" />
+<em>Figure 1 — The five-layer defense: client attestation, fingerprint attribution, fake-tool injection, signature-bearing blocks, and the distillation-resistant streamlined output mode.</em></p>
+
+<h3 id="distill-layer1">Layer 1: Native Client Attestation — "Are you really Claude Code?"</h3>
+
+<h4>How it works</h4>
+
+<p>Before each API request, Bun's native HTTP stack injects an attestation token into the serialized request body. The server verifies the token to confirm the request came from a real Claude Code client, not a third-party proxy or recording tool.</p>
+
+<h4>Source</h4>
+
+<pre><code class="language-typescript">// src/constants/system.ts Lines 64-68:
+// When NATIVE_CLIENT_ATTESTATION is enabled, includes a `cch=00000` placeholder.
+// Before the request is sent, Bun's native HTTP stack finds this placeholder
+// in the request body and overwrites the zeros with a computed hash. The
+// server verifies this token to confirm the request came from a real Claude
+// Code client. See bun-anthropic/src/http/Attestation.zig for implementation.
+
+// Lines 81-82:
+const cch = feature('NATIVE_CLIENT_ATTESTATION') ? ' cch=00000;' : ''
+</code></pre>
+
+<h4>Engineering details</h4>
+
+<p><img alt="Native client attestation flow" src="../images/anti_distill_2_attestation.png" />
+<em>Figure 2 — Attestation.zig at the Bun layer rewrites the <code>cch=00000</code> placeholder to a real hash before the request hits the wire. The server validates the token; invalid or missing → request rejected.</em></p>
+
+<p><strong>Why a placeholder instead of direct injection?</strong> The source comment explains: "same-length replacement avoids Content-Length changes and buffer reallocation" — a 5-character placeholder gets swapped with a 5-character hash, no body length change, no memory reallocation.</p>
+
+<p><strong>Implementation language</strong>: Zig (<code>bun-anthropic/src/http/Attestation.zig</code>), running at Bun's native HTTP layer. The auth logic isn't in JavaScript or TypeScript — it can't be bypassed by patching the JS layer.</p>
+
+<h3 id="distill-layer2">Layer 2: Fingerprint Attribution — "Which client generated this?"</h3>
+
+<h4>How it works</h4>
+
+<p>Each API request carries a 3-character fingerprint computed via SHA256 over a salt + specific characters from the user's first message + the version string. This lets Anthropic trace every piece of training data back to its originating client.</p>
+
+<h4>Source</h4>
+
+<pre><code class="language-typescript">// src/utils/fingerprint.ts:
+
+// Hardcoded salt (must stay in sync with backend verification)
+export const FINGERPRINT_SALT = '59cf53e54c78'
+
+export function computeFingerprint(
+  messageText: string,
+  version: string,
+): string {
+  // Pull characters at positions 4, 7, 20 from the user's first message
+  const indices = [4, 7, 20]
+  const chars = indices.map(i =&gt; messageText[i] || '0').join('')
+
+  const fingerprintInput = `${FINGERPRINT_SALT}${chars}${version}`
+
+  // SHA256, take first 3 hex chars
+  const hash = createHash('sha256').update(fingerprintInput).digest('hex')
+  return hash.slice(0, 3)
+}
+</code></pre>
+
+<pre><code class="language-typescript">// src/constants/system.ts Lines 78-91:
+// Fingerprint is embedded in the version string sent in headers
+const version = `${MACRO.VERSION}.${fingerprint}`
+const header = `x-anthropic-billing-header: cc_version=${version};
+  cc_entrypoint=${entrypoint};${cch}${workloadPair}`
+</code></pre>
+
+<h4>Compute flow</h4>
+
+<p><img alt="Fingerprint computation flow" src="../images/anti_distill_3_fingerprint.png" />
+<em>Figure 3 — Salt + chars-at-positions-[4,7,20] + version → SHA256 → first 3 hex chars → embedded in the billing header.</em></p>
+
+<p><strong>The source comment explicitly notes:</strong> "IMPORTANT: Do not change this method without careful coordination with 1P and 3P (Bedrock, Vertex, Azure) APIs." — the fingerprint algorithm has to stay consistent across every API provider.</p>
+
+<h3 id="distill-layer3">Layer 3: Fake Tools Injection — "Honeypot tools"</h3>
+
+<h4>How it works</h4>
+
+<p>This is the cleverest layer. Claude Code sends <code>anti_distillation: ['fake_tools']</code> to the API; the server mixes <strong>fake tool definitions</strong> into the normal tool list. If anyone records this API traffic and trains a model on it, the distilled model will "know" the fake tools — and that knowledge is the evidence of distillation.</p>
+
+<h4>Source</h4>
+
+<pre><code class="language-typescript">// src/services/api/claude.ts Lines 301-313:
+// Anti-distillation: send fake_tools opt-in for 1P CLI only
+if (
+  feature('ANTI_DISTILLATION_CC')
+    ? process.env.CLAUDE_CODE_ENTRYPOINT === 'cli' &amp;&amp;
+      shouldIncludeFirstPartyOnlyBetas() &amp;&amp;
+      getFeatureValue_CACHED_MAY_BE_STALE(
+        'tengu_anti_distill_fake_tool_injection',
+        false,
+      )
+    : false
+) {
+  result.anti_distillation = ['fake_tools']
+}
+</code></pre>
+
+<h4>Trigger conditions</h4>
+
+<p><img alt="Fake tools injection conditions" src="../images/anti_distill_4_faketools.png" />
+<em>Figure 4 — All four gates (feature flag, CLI entrypoint, first-party API, GrowthBook gate) must pass before fake tools are opted in.</em></p>
+
+<p><strong>Critical limitation:</strong> only fires on Anthropic's first-party API. Requests via Bedrock, Vertex, or other third-party proxies <strong>do not</strong> get fake tools — <code>shouldIncludeFirstPartyOnlyBetas()</code> excludes those providers.</p>
+
+<p><strong>Honeypot mechanics:</strong> the actual fake-tool definitions live server-side; the client only sends an opt-in signal. Means the fake tools can be rotated server-side without shipping a new client.</p>
+
+<h3 id="distill-layer4">Layer 4: Signature-Bearing Blocks — "Signatures as locks"</h3>
+
+<h4>How it works</h4>
+
+<p>The API's <code>thinking</code> blocks and <code>connector_text</code> blocks both carry a <strong>cryptographic signature</strong> bound to the API key that generated them. Switch keys, and those signatures instantly become invalid — the API rejects them with a 400.</p>
+
+<h4>Source</h4>
+
+<pre><code class="language-typescript">// src/utils/messages.ts Lines 5060-5064:
+// Strip signature-bearing blocks (thinking, redacted_thinking, connector_text)
+// from all assistant messages. Their signatures are bound to the API key that
+// generated them; after a credential change (e.g. /login) they're invalid and
+// the API rejects them with a 400.
+
+export function stripSignatureBlocks(messages: Message[]): Message[] {
+  const result = messages.map(msg =&gt; {
+    if (msg.type !== 'assistant') return msg
+    const content = msg.message.content
+    const filtered = content.filter(block =&gt; {
+      if (isThinkingBlock(block)) return false        // drop thinking
+      if (feature('CONNECTOR_TEXT')) {
+        if (isConnectorTextBlock(block)) return false  // drop connector_text
+      }
+      return true
+    })
+    return { ...msg, message: { ...msg.message, content: filtered } }
+  })
+  return result
+}
+</code></pre>
+
+<h4>Connector Text — the anti-distillation mechanism</h4>
+
+<pre><code class="language-typescript">// src/utils/betas.ts Lines 279-284:
+// POC: server-side connector-text summarization (anti-distillation). The
+// API buffers assistant text between tool calls, summarizes it, and returns
+// the summary with a signature so the original can be restored on subsequent
+// turns — same mechanism as thinking blocks.
+</code></pre>
+
+<p><img alt="Connector text signature flow" src="../images/anti_distill_5_connector.png" />
+<em>Figure 5 — The API buffers assistant text between tool calls, summarizes it, and returns a summary plus a <code>signature_delta</code>. On the next turn, the signed summary lets the API restore the original text — but anyone recording the traffic only sees summaries.</em></p>
+
+<p><strong>Current limitation:</strong> Connector Text is only enabled for Anthropic-internal users (<code>USER_TYPE === 'ant'</code>) — measuring TTFT/TTLT/capacity impact. Feature gate: <code>tengu_slate_prism</code>.</p>
+
+<h3 id="distill-layer5">Layer 5: Streamlined Mode — "Distillation-resistant output format"</h3>
+
+<h4>How it works</h4>
+
+<p>The source comment names this layer literally: <strong>"distillation-resistant output format"</strong>. It strips information specifically to reduce the value of the output as distillation training data.</p>
+
+<h4>Source</h4>
+
+<pre><code class="language-typescript">// src/utils/streamlinedTransform.ts Lines 1-9:
+// Streamlined mode is a "distillation-resistant" output format that:
+// - Keeps text messages intact
+// - Summarizes tool calls with cumulative counts (resets when text appears)
+// - Omits thinking content
+// - Strips tool list and model info from init messages
+</code></pre>
+
+<h4>What gets filtered</h4>
+
+<table>
+<thead>
+<tr><th>Original output</th><th>Streamlined output</th></tr>
+</thead>
+<tbody>
+<tr><td>Text content</td><td>✅ Preserved</td></tr>
+<tr><td>Thinking content</td><td>❌ Dropped</td></tr>
+<tr><td>Tool call details</td><td>📊 Cumulative counts only</td></tr>
+<tr><td>Tool definition list</td><td>❌ Dropped</td></tr>
+<tr><td>Model info</td><td>❌ Dropped</td></tr>
+</tbody>
+</table>
+
+<p><strong>What does the would-be distiller lose?</strong></p>
+
+<ul>
+<li><strong>Thinking content</strong>: the model's reasoning chain — the most valuable distillation signal — is dropped entirely</li>
+<li><strong>Tool definitions</strong>: the full schema for 43+ tools is removed; can't replicate the tool system</li>
+<li><strong>Tool call details</strong>: only summaries like "Searched 3 files, Read 2 files" remain — can't learn tool-use strategy</li>
+</ul>
+
+<h3 id="distill-defense-matrix">Defense matrix</h3>
+
+<table>
+<thead>
+<tr><th>Layer</th><th>Defends against</th><th>Detect / Block</th><th>Bypass difficulty</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Attestation</strong></td><td>Spoofed clients</td><td>Block</td><td>High — requires reversing native Zig code</td></tr>
+<tr><td><strong>Fingerprint</strong></td><td>Anonymous distillation</td><td>Post-hoc trace</td><td>Medium — algorithm is public</td></tr>
+<tr><td><strong>Fake Tools</strong></td><td>API traffic recording</td><td>Post-hoc detect</td><td>Low — don't request <code>fake_tools</code></td></tr>
+<tr><td><strong>Signature</strong></td><td>Cross-key data reuse</td><td>Block</td><td>High — server-side validation</td></tr>
+<tr><td><strong>Streamlined</strong></td><td>Output distillation</td><td>Reduce value</td><td>Low — only applies to SDK mode</td></tr>
+</tbody>
+</table>
+
+<h3 id="distill-weaknesses">Where this defense system is weak</h3>
+
+<p>From a pure security-research perspective (understanding the defense is how you improve the defense):</p>
+
+<p><strong>1. Fake Tools only fires on first-party.</strong> Bedrock/Vertex requests don't get fake tools, because <code>shouldIncludeFirstPartyOnlyBetas()</code> excludes third-party providers. If the distiller uses AWS Bedrock's Claude endpoint, this layer is wholly inactive.</p>
+
+<p><strong>2. Fingerprint algorithm is fully public via the source.</strong> Salt <code>59cf53e54c78</code>, character positions <code>[4, 7, 20]</code>, SHA256 — all visible. A distiller can forge fingerprints (though the server may have other validation).</p>
+
+<p><strong>3. Connector Text only on internal users.</strong> <code>process.env.USER_TYPE === 'ant'</code> means external users' conversation text gets no Connector Text protection.</p>
+
+<p><strong>4. Streamlined Mode only applies to SDK output.</strong> Normal CLI interactions don't go through Streamlined Transform; full tool-call details and thinking content are visible in standard output.</p>
+
+<p><strong>5. Attestation is the strongest layer.</strong> Native client auth runs in Zig, outside the JavaScript-controllable surface. But if a distiller calls the API directly (not via Claude Code), this layer doesn't apply — it protects against "impersonating Claude Code", not "using the raw API".</p>
+
+<h3 id="distill-key-insight">Key insight</h3>
+
+<p>Anthropic's anti-distillation strategy isn't a single point of defense — it's a <strong>layered, complementary</strong> system. None of the layers is perfect, but stacked together they cover different attack surfaces:</p>
+
+<p><img alt="Attacks vs defenses matrix" src="../images/anti_distill_6_attacks.png" />
+<em>Figure 6 — Each attack vector is covered by a different defense layer.</em></p>
+
+<p><strong>The deepest defense isn't on the client at all:</strong> the actual reasoning capability (the weights) never leaves Anthropic's servers. Client-side defenses protect <strong>training-data quality</strong> and <strong>API usage attribution</strong> — even if a distiller records output, Anthropic can trace its origin and detect fake-tool traces in the resulting distilled model.</p>
+
+<h3 id="distill-prior-work">Comparison with prior analyses</h3>
+
+<p>Alex Kim's blog [8] first reported the existence of fake tools and connector text, but only described the code snippets — without analyzing the full defense system. This article's new contributions:</p>
+
+<ol>
+<li><strong>Systematic 5-layer framework</strong> — organizes scattered findings into a layered defense system.</li>
+<li><strong>Native Client Attestation Zig analysis</strong> — not previously mentioned in any public analysis.</li>
+<li><strong>Full fingerprint algorithm reconstruction</strong> — including salt, character positions, hash method.</li>
+<li><strong>Streamlined Mode as a distillation-resistant format</strong> — the source comment literally says "distillation-resistant", not previously reported.</li>
+<li><strong>Defense matrix and weakness analysis</strong> — assessing each layer's effectiveness and limitations from a security-research stance.</li>
+</ol>
+
+<h3 id="distill-academic-mapping">Mapping to the academic literature</h3>
+
+<p>Anthropic's anti-distillation implementation maps interestingly onto recent academic work:</p>
+
+<table>
+<thead>
+<tr><th>Anthropic implementation</th><th>Academic concept</th><th>Reference</th></tr>
+</thead>
+<tbody>
+<tr><td>Fake Tools Injection</td><td>Radioactive watermarking / data poisoning</td><td>[6] Can LLM Watermarks Robustly Prevent Unauthorized Knowledge Distillation? (ACL 2025)</td></tr>
+<tr><td>Fingerprint Attribution</td><td>LLM fingerprinting</td><td>[5] LLM Fingerprinting via Semantically Conditioned Watermarks (arXiv 2505.16723)</td></tr>
+<tr><td>Connector Text Summarization</td><td>Trace rewriting / output perturbation</td><td>[7] Protecting Language Models Against Unauthorized Distillation through Trace Rewriting (arXiv 2602.15143)</td></tr>
+<tr><td>Streamlined Mode</td><td>Distillation-resistant decoding</td><td>[4] Towards Distillation-Resistant LLMs: An Information-Theoretic Perspective (arXiv 2602.03396)</td></tr>
+<tr><td>5-layer stack</td><td>Defense-in-depth for ML systems</td><td>[2] IAPS: AI Distillation Attacks — The Case for Targeted Government Intervention</td></tr>
+</tbody>
+</table>
+
+<p>Worth noting: academic papers are largely theoretical proposals or controlled experiments — Claude Code is a <strong>production deployment serving millions of users</strong>. That gives this analysis distinct empirical value: we're seeing the engineering trade-offs Anthropic actually made under real adversarial pressure, not a paper algorithm.</p>
+
+<h3 id="distill-references">References</h3>
+
+<p>[1] Berkeley Law. "The Innovation Dilemma: AI Distillation in OpenAI v. DeepSeek." <em>The Network</em>, 2025. <a href="https://sites.law.berkeley.edu/thenetwork/2025/03/30/the-innovation-dilemma-ai-distillation-in-openai-v-deepseek/">Link</a></p>
+
+<p>[2] IAPS. "AI Distillation Attacks: The Case for Targeted Government Intervention." Institute for AI Policy and Strategy, 2026. <a href="https://www.iaps.ai/research/ai-distillation-attacks">Link</a></p>
+
+<p>[3] Google Cloud Blog. "GTIG AI Threat Tracker: Distillation, Experimentation, and Integration of AI for Adversarial Use." 2026. <a href="https://cloud.google.com/blog/topics/threat-intelligence/distillation-experimentation-integration-ai-adversarial-use">Link</a></p>
+
+<p>[4] arXiv:2602.03396. "Towards Distillation-Resistant Large Language Models: An Information-Theoretic Perspective." 2026. <a href="https://arxiv.org/abs/2602.03396">Link</a></p>
+
+<p>[5] arXiv:2505.16723. "LLM Fingerprinting via Semantically Conditioned Watermarks." 2025. <a href="https://arxiv.org/abs/2505.16723">Link</a></p>
+
+<p>[6] arXiv:2502.11598. "Can LLM Watermarks Robustly Prevent Unauthorized Knowledge Distillation?" ACL 2025 Main. <a href="https://arxiv.org/abs/2502.11598">Link</a></p>
+
+<p>[7] arXiv:2602.15143. "Protecting Language Models Against Unauthorized Distillation through Trace Rewriting." 2026. <a href="https://arxiv.org/abs/2602.15143">Link</a></p>
+
+<p>[8] Alex Kim. "The Claude Code Source Leak: fake tools, frustration regexes, undercover mode, and more." 2026. <a href="https://alex000kim.com/posts/2026-03-31-claude-code-source-leak/">Link</a></p>
+
+<p><em>All code references taken from the Claude Code source (2026-03-31 snapshot). File paths and line numbers reflect actual source locations.</em></p>
+
+<hr />
+
+<p style="text-align:center; color: var(--text-dim); font-style: italic;">↓ Full Harness Engineering textbook follows ↓</p>
+
+<hr />
+
   <h1 id="harness-engineering-a-comprehensive-guide-based-on-claude-code">Harness Engineering: A Comprehensive Guide Based on Claude Code</h1>
 <p><strong>A Comprehensive Textbook on AI Agent Infrastructure Design</strong></p>
 <blockquote>

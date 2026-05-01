@@ -13,8 +13,8 @@
 
 **Two findings you won't see elsewhere:**
 
-- 🔬 **[Grove](docs/zh/grove-system.md)** — Anthropic's hidden training-data pipeline. Retention jumps **30 days → 5 years** when enabled. 796 telemetry events flow into BigQuery columns the source code labels *"training data"*.
-- 🛡️ **[Anti-Distillation](docs/zh/anti-distillation.md)** — 5-layer defense: native client attestation, request fingerprinting, fake-tool injection, signature-bound thinking blocks, "distillation-resistant" streamlined output.
+- 🔬 **[Grove](https://wanlanglin.github.io/-awesome-cc-harness/en/#grove-system)** — Anthropic's hidden training-data pipeline. Retention jumps **30 days → 5 years** when enabled. 796 telemetry events flow into BigQuery columns the source code labels *"training data"*.
+- 🛡️ **[Anti-Distillation](https://wanlanglin.github.io/-awesome-cc-harness/en/#anti-distillation)** — 5-layer defense: native client attestation, request fingerprinting, fake-tool injection, signature-bound thinking blocks, "distillation-resistant" streamlined output.
 
 👉 **[Read the full English version online](https://wanlanglin.github.io/-awesome-cc-harness/en/)**
 
