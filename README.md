@@ -1,17 +1,34 @@
 # awesome-cc-harness
 
-# 从 Claude Code 512K 行源码逆向 Harness Engineering
-
 [![GitHub stars](https://img.shields.io/github/stars/WanLanglin/-awesome-cc-harness?style=social)](https://github.com/WanLanglin/-awesome-cc-harness/stargazers)
 [![License](https://img.shields.io/badge/License-All%20Rights%20Reserved-red.svg)](LICENSE)
 [![中文](https://img.shields.io/badge/语言-中文-blue.svg)](https://wanlanglin.github.io/-awesome-cc-harness/zh/)
 [![English](https://img.shields.io/badge/Language-English-green.svg)](https://wanlanglin.github.io/-awesome-cc-harness/en/)
 
-> 基于 Claude Code 全部 512,664 行 TypeScript 源码的系统性逆向分析，拆解 Anthropic 在 Agent Loop、工具系统、权限模型、沙盒安全、上下文工程等方面的设计决策与工程取舍。
+## English (TL;DR)
 
-## 👉 [点击这里开始在线阅读](https://wanlanglin.github.io/-awesome-cc-harness/)
+> **Reverse-engineering all 512,664 lines of Claude Code's TypeScript source** — agent loop, tool system, permission model, sandbox, context engineering. A 16-chapter textbook (~50,000 words, 147 code blocks, 77 diagrams) on how Anthropic actually builds an agent harness.
+
+> 📣 **Featured in Chinese AI media** — Republished by [QingkeAI (青稞AI)](http://mp.weixin.qq.com/s?__biz=MzI1MzEwMzIwOQ==&mid=2247513815&idx=1&sn=bfa7e1a0c0accdb65d1def80d6b28be7) and other WeChat publications, with **20,000+ reads** and **2,000+ shares**. [Original Chinese article](https://mp.weixin.qq.com/s/WiE6w5ORTBoh5ggLlkQr9g).
+
+**Two findings you won't see elsewhere:**
+
+- 🔬 **[Grove](docs/zh/grove-system.md)** — Anthropic's hidden training-data pipeline. Retention jumps **30 days → 5 years** when enabled. 796 telemetry events flow into BigQuery columns the source code labels *"training data"*.
+- 🛡️ **[Anti-Distillation](docs/zh/anti-distillation.md)** — 5-layer defense: native client attestation, request fingerprinting, fake-tool injection, signature-bound thinking blocks, "distillation-resistant" streamlined output.
+
+👉 **[Read the full English version online](https://wanlanglin.github.io/-awesome-cc-harness/en/)**
 
 ![Harness Architecture](images/01_harness_architecture.png)
+
+---
+
+# 从 Claude Code 512K 行源码逆向 Harness Engineering
+
+> 基于 Claude Code 全部 512,664 行 TypeScript 源码的系统性逆向分析，拆解 Anthropic 在 Agent Loop、工具系统、权限模型、沙盒安全、上下文工程等方面的设计决策与工程取舍。
+
+> 📣 **媒体报道**：Harness Engineering 主分析已被 [青稞AI](http://mp.weixin.qq.com/s?__biz=MzI1MzEwMzIwOQ==&mid=2247513815&idx=1&sn=bfa7e1a0c0accdb65d1def80d6b28be7) 等公众号转发，累计阅读 **20,000+**，转发 **2,000+**。[原文链接](https://mp.weixin.qq.com/s/WiE6w5ORTBoh5ggLlkQr9g)
+
+## 👉 [点击这里开始在线阅读](https://wanlanglin.github.io/-awesome-cc-harness/)
 
 ---
 
