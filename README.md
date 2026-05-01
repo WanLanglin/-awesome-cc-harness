@@ -4,8 +4,8 @@
 
 [![GitHub stars](https://img.shields.io/github/stars/WanLanglin/-awesome-cc-harness?style=social)](https://github.com/WanLanglin/-awesome-cc-harness/stargazers)
 [![License](https://img.shields.io/badge/License-All%20Rights%20Reserved-red.svg)](LICENSE)
-[![中文](https://img.shields.io/badge/语言-中文-blue.svg)](docs/zh/)
-[![English](https://img.shields.io/badge/Language-English-green.svg)](docs/en/)
+[![中文](https://img.shields.io/badge/语言-中文-blue.svg)](https://wanlanglin.github.io/-awesome-cc-harness/zh/)
+[![English](https://img.shields.io/badge/Language-English-green.svg)](https://wanlanglin.github.io/-awesome-cc-harness/en/)
 
 > 基于 Claude Code 全部 512,664 行 TypeScript 源码的系统性逆向分析，拆解 Anthropic 在 Agent Loop、工具系统、权限模型、沙盒安全、上下文工程等方面的设计决策与工程取舍。
 
